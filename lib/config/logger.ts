@@ -32,7 +32,7 @@ const baseLoggerConfig: winston.LoggerOptions = {
 
 // Add file transports only if file logging is enabled
 if (logConfig.fileLogging && !logConfig.silent) {
-  baseLoggerConfig.transports!.push(
+  (baseLoggerConfig.transports as winston.transport[]).push(
     // Error log file - only errors
     new winston.transports.File({ 
       filename: path.join(logsDir, 'error.log'), 
@@ -52,7 +52,7 @@ if (logConfig.fileLogging && !logConfig.silent) {
 
 // Add console transport if console logging is enabled
 if (logConfig.consoleLogging && !logConfig.silent) {
-  baseLoggerConfig.transports!.push(
+  (baseLoggerConfig.transports as winston.transport[]).push(
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),

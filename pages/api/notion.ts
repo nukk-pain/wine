@@ -1,6 +1,37 @@
 // pages/api/notion.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { saveWineToNotion, saveReceiptToNotion, updateWineRecord } from '@/lib/notion';
+import { saveWineToNotion, saveReceiptToNotion, updateWineRecord, WineData, ReceiptData } from '@/lib/notion';
+import { WineInfo, ReceiptInfo } from '@/lib/gemini';
+
+// Convert Gemini WineInfo to Notion WineData format
+function convertWineInfoToWineData(wineInfo: WineInfo): WineData {
+  return {
+    name: wineInfo.name,
+    vintage: wineInfo.vintage,
+    'Region/Producer': wineInfo.region && wineInfo.producer 
+      ? `${wineInfo.region} / ${wineInfo.producer}`
+      : wineInfo.region || wineInfo.producer || undefined,
+    'Varietal(품종)': wineInfo.grape_variety,
+    // Default values - these will be set by the API
+    'Purchase date': undefined, // Will be set to current date
+    Status: undefined // Will be set to "재고"
+  };
+}
+
+// Convert Gemini ReceiptInfo to Notion ReceiptData format
+function convertReceiptInfoToReceiptData(receiptInfo: ReceiptInfo): ReceiptData {
+  return {
+    store: receiptInfo.store_name,
+    date: receiptInfo.purchase_date || new Date().toISOString().split('T')[0],
+    items: receiptInfo.items.map(item => ({
+      name: item.wine_name,
+      price: item.price,
+      quantity: item.quantity,
+      vintage: item.vintage
+    })),
+    total: receiptInfo.total_amount || 0
+  };
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -33,7 +64,25 @@ export default async function handler(
             error: 'Missing required data'
           });
         }
-        result = await saveWineToNotion(data, source);
+        
+        // Convert Gemini format to Notion format if needed
+        let wineData: WineData;
+        if (data.producer && data.grape_variety) {
+          // This looks like Gemini WineInfo format
+          wineData = convertWineInfoToWineData(data as WineInfo);
+        } else {
+          // Already in WineData format or similar
+          wineData = data as WineData;
+        }
+        
+        // Add current date as purchased_date and set status to "재고"
+        const enrichedWineData: WineData = {
+          ...wineData,
+          'Purchase date': new Date().toISOString().split('T')[0], // YYYY-MM-DD format
+          Status: '재고'
+        };
+        
+        result = await saveWineToNotion(enrichedWineData, source);
         break;
 
       case 'save_receipt':
@@ -43,7 +92,24 @@ export default async function handler(
             error: 'Missing required data'
           });
         }
-        result = await saveReceiptToNotion(data);
+        
+        // Convert Gemini format to Notion format if needed
+        let receiptData: ReceiptData;
+        if (data.store_name && data.items) {
+          // This looks like Gemini ReceiptInfo format
+          receiptData = convertReceiptInfoToReceiptData(data as ReceiptInfo);
+        } else {
+          // Already in ReceiptData format
+          receiptData = data as ReceiptData;
+        }
+        
+        // Ensure current date is set
+        const enrichedReceiptData: ReceiptData = {
+          ...receiptData,
+          date: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+        };
+        
+        result = await saveReceiptToNotion(enrichedReceiptData);
         break;
 
       case 'update_status':

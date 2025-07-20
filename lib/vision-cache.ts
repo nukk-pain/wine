@@ -94,7 +94,7 @@ export function getCachedResult(cacheKey: string): string | undefined {
  */
 export function setCachedResult(cacheKey: string, result: string, ttl?: number): boolean {
   try {
-    const success = cache.set(cacheKey, result, ttl);
+    const success = cache.set(cacheKey, result, ttl || cacheConf.stdTTL);
     if (success) {
       visionLogger.debug('Cache set successful', { 
         cacheKey, 

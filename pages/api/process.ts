@@ -39,6 +39,7 @@ export default async function handler(
     const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
     const type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
     const useGemini = Array.isArray(fields.useGemini) ? fields.useGemini[0] : fields.useGemini;
+    const skipNotion = Array.isArray(fields.skipNotion) ? fields.skipNotion[0] : fields.skipNotion;
 
     if (!imageFile) {
       return res.status(400).json({ 
@@ -73,15 +74,17 @@ export default async function handler(
         // Use Gemini API for processing
         if (imageType === 'auto') {
           // Auto-detect image type
-          imageType = await geminiService.classifyImage(imageBuffer, mimeType);
-          logger.info('Image classified', { imageType });
+          const classifiedType = await geminiService.classifyImage(imageBuffer, mimeType);
+          logger.info('Image classified', { classifiedType });
           
-          if (imageType === 'unknown') {
+          if (classifiedType === 'unknown') {
             return res.status(400).json({
               success: false,
               error: 'Could not determine image type'
             });
           }
+          
+          imageType = classifiedType as 'wine_label' | 'receipt';
         }
 
         // Extract information based on type
@@ -102,13 +105,13 @@ export default async function handler(
         logger.info('Falling back to Vision API');
         const visionResult = await processWineImage(imageFile.filepath);
         extractedData = visionResult.data;
-        imageType = visionResult.imageType;
+        imageType = visionResult.imageType as 'wine_label' | 'receipt';
       }
     } else {
       // Use existing OCR-based processing
       const visionResult = await processWineImage(imageFile.filepath);
       extractedData = visionResult.data;
-      imageType = visionResult.imageType;
+      imageType = visionResult.imageType as 'wine_label' | 'receipt';
     }
 
     // 이미지를 영구 저장소로 이동
@@ -122,6 +125,18 @@ export default async function handler(
       });
       // 저장 실패 시 임시 파일 정리
       await fs.unlink(imageFile.filepath).catch(() => {});
+    }
+
+    // Skip Notion saving if requested
+    if (skipNotion === 'true') {
+      return res.status(200).json({
+        success: true,
+        data: {
+          type: imageType,
+          extractedData: extractedData,
+          savedImagePath: savedImagePath
+        }
+      });
     }
 
     // Save to Notion based on type
@@ -157,9 +172,7 @@ export default async function handler(
   } catch (error) {
     logger.error('Process API error', { 
       error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      useGemini: useGemini,
-      imageType: type
+      stack: error instanceof Error ? error.stack : undefined
     });
     return res.status(500).json({
       success: false,

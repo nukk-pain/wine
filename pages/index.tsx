@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { ImageUpload } from '@/components/ImageUpload';
 import { ImageTypeSelector, ImageType } from '@/components/ImageTypeSelector';
 import { ResultDisplay } from '@/components/ResultDisplay';
+import { DataConfirmation } from '@/components/DataConfirmation';
 
 // Layout components for responsive design
 const ResponsiveLayout = ({ children }: { children: React.ReactNode }) => (
@@ -54,6 +55,13 @@ interface ProcessedData {
   extractedData: any;
   notionResult?: any;
   notionResults?: any[];
+  savedImagePath?: string;
+}
+
+interface ConfirmationData {
+  type: 'wine_label' | 'receipt';
+  extractedData: any;
+  savedImagePath?: string;
 }
 
 export default function MainPage() {
@@ -61,6 +69,7 @@ export default function MainPage() {
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
   const [selectedType, setSelectedType] = useState<ImageType | null>(null);
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
+  const [confirmationData, setConfirmationData] = useState<ConfirmationData | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string>('');
@@ -77,6 +86,7 @@ export default function MainPage() {
     // Reset state for new upload
     setSelectedType(null);
     setProcessedData(null);
+    setConfirmationData(null);
     setLoading(false);
     setSuccess(false);
     setError('');
@@ -103,6 +113,7 @@ export default function MainPage() {
     formData.append('image', uploadedFile);
     formData.append('type', type);
     formData.append('useGemini', 'true');
+    formData.append('skipNotion', 'true'); // Skip Notion saving for now
 
     try {
       const response = await fetch('/api/process', {
@@ -113,11 +124,12 @@ export default function MainPage() {
       const result = await response.json();
 
       if (response.ok && result.success) {
-        setProcessedData(result.data);
-        // If the processing includes Notion saving, mark as success
-        if (result.data.notionResult || result.data.notionResults) {
-          setSuccess(true);
-        }
+        // Show confirmation data instead of immediately saving to Notion
+        setConfirmationData({
+          type: result.data.type,
+          extractedData: result.data.extractedData,
+          savedImagePath: result.data.savedImagePath
+        });
       } else {
         setError(result.error || '처리 중 오류가 발생했습니다');
       }
@@ -129,7 +141,7 @@ export default function MainPage() {
   };
 
   const handleSaveToNotion = async () => {
-    if (!processedData) return;
+    if (!confirmationData) return;
 
     setLoading(true);
     setError('');
@@ -141,22 +153,44 @@ export default function MainPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: processedData.type === 'wine_label' ? 'save_wine' : 'save_receipt',
-          data: processedData.extractedData
+          action: confirmationData.type === 'wine_label' ? 'save_wine' : 'save_receipt',
+          data: confirmationData.extractedData,
+          source: confirmationData.type
         }),
       });
 
       const result = await response.json();
 
       if (response.ok && result.success) {
+        setProcessedData({
+          type: confirmationData.type,
+          extractedData: confirmationData.extractedData,
+          savedImagePath: confirmationData.savedImagePath,
+          notionResult: result.result
+        });
         setSuccess(true);
+        setConfirmationData(null); // Clear confirmation data after saving
       } else {
-        setError(result.error || '저장 중 오류가 발생했습니다');
+        setError(result.error || result.details || '저장 중 오류가 발생했습니다');
       }
     } catch (err) {
       setError('저장 중 오류가 발생했습니다');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancelSave = () => {
+    setConfirmationData(null);
+    setError('');
+  };
+
+  const handleEditData = (editedData: any) => {
+    if (confirmationData) {
+      setConfirmationData({
+        ...confirmationData,
+        extractedData: editedData
+      });
     }
   };
 
@@ -208,8 +242,22 @@ export default function MainPage() {
             </ResponsiveLayout.LeftColumn>
 
             <ResponsiveLayout.RightColumn>
-              {processedData && (
-                <ProcessingStep title="3. 처리 결과">
+              {confirmationData && (
+                <ProcessingStep title="3. 추출된 정보 확인">
+                  <DataConfirmation
+                    type={confirmationData.type}
+                    data={confirmationData.extractedData}
+                    loading={loading}
+                    error={error}
+                    onConfirm={handleSaveToNotion}
+                    onCancel={handleCancelSave}
+                    onEdit={handleEditData}
+                  />
+                </ProcessingStep>
+              )}
+
+              {processedData && !confirmationData && (
+                <ProcessingStep title="4. 저장 완료">
                   <ResultDisplay
                     data={processedData.extractedData}
                     type={processedData.type}
@@ -221,13 +269,13 @@ export default function MainPage() {
                 </ProcessingStep>
               )}
 
-              {loading && !processedData && (
+              {loading && !processedData && !confirmationData && (
                 <ProcessingStep title="">
                   <LoadingSpinner message="처리 중..." />
                 </ProcessingStep>
               )}
 
-              {error && !processedData && (
+              {error && !processedData && !confirmationData && (
                 <ProcessingStep title="">
                   <ErrorMessage message={error} />
                 </ProcessingStep>
