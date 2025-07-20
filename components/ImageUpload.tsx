@@ -67,54 +67,65 @@ export function ImageUpload({ onUpload }: ImageUploadProps) {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto p-6">
+    <div className="w-full">
       <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+        className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 cursor-pointer ${
           isDragOver
-            ? 'border-blue-400 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
+            ? 'border-blue-400 bg-blue-50 scale-105'
+            : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
         }`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onClick={() => fileInputRef.current?.click()}
       >
-        <h3 className="text-lg font-semibold mb-4">와인 라벨 촬영하기</h3>
-        <p className="text-gray-600 mb-4">파일을 드래그하거나 클릭하여 업로드</p>
+        <div className="text-6xl mb-4">📷</div>
+        <h3 className="text-xl font-bold mb-3 text-gray-800">사진 촬영하기</h3>
+        <p className="text-gray-600 mb-6">와인 라벨이나 영수증을 촬영해주세요</p>
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
+          capture="environment"
           onChange={handleFileChange}
           aria-label="이미지 파일 선택"
           className="hidden"
         />
         <button
           type="button"
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          className="w-full py-4 px-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-lg font-bold rounded-xl shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 transform active:scale-95"
           onClick={(e) => {
             e.stopPropagation();
             fileInputRef.current?.click();
           }}
         >
-          파일 선택
+          📱 카메라 열기
         </button>
+        <p className="text-sm text-gray-500 mt-3">또는 갤러리에서 선택</p>
       </div>
       
       {error && (
-        <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded" role="alert">
-          {error}
+        <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl" role="alert">
+          <div className="flex items-center space-x-2">
+            <span className="text-red-500">⚠️</span>
+            <span className="font-medium">{error}</span>
+          </div>
         </div>
       )}
       
       {previewUrl && (
         <div className="mt-6">
-          <h3 className="text-sm font-medium mb-2">미리보기</h3>
-          <img 
-            src={previewUrl} 
-            alt="미리보기" 
-            className="w-full max-w-xs mx-auto rounded-lg shadow-md"
-          />
+          <h3 className="text-lg font-bold mb-3 text-gray-800">📸 촬영된 이미지</h3>
+          <div className="relative">
+            <img 
+              src={previewUrl} 
+              alt="촬영된 이미지" 
+              className="w-full rounded-xl shadow-lg border-2 border-gray-200"
+            />
+            <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+              ✅ 업로드 완료
+            </div>
+          </div>
         </div>
       )}
     </div>

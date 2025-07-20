@@ -6,47 +6,41 @@ import { ImageTypeSelector, ImageType } from '@/components/ImageTypeSelector';
 import { ResultDisplay } from '@/components/ResultDisplay';
 import { DataConfirmation } from '@/components/DataConfirmation';
 
-// Layout components for responsive design
-const ResponsiveLayout = ({ children }: { children: React.ReactNode }) => (
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+// Mobile-first layout components
+const MobileLayout = ({ children }: { children: React.ReactNode }) => (
+  <div className="flex flex-col space-y-4">
     {children}
   </div>
 );
 
-ResponsiveLayout.LeftColumn = ({ children }: { children: React.ReactNode }) => (
-  <div className="space-y-6">
-    {children}
-  </div>
-);
-
-ResponsiveLayout.RightColumn = ({ children }: { children: React.ReactNode }) => (
-  <div className="space-y-6">
-    {children}
-  </div>
-);
-
-// Processing step wrapper component
-const ProcessingStep = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <section className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-    {title && <h2 className="text-lg sm:text-xl font-semibold mb-4">{title}</h2>}
+// Mobile-optimized processing step wrapper
+const ProcessingStep = ({ title, children, className = "" }: { 
+  title: string; 
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <section className={`bg-white rounded-xl shadow-lg p-6 ${className}`}>
+    {title && <h2 className="text-xl font-bold mb-6 text-gray-800">{title}</h2>}
     {children}
   </section>
 );
 
-// Loading spinner component
+// Mobile-optimized loading spinner
 const LoadingSpinner = ({ message }: { message: string }) => (
-  <div className="text-center">
-    <div className="text-base sm:text-lg">{message}</div>
-    <div className="mt-4 flex justify-center">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  <div className="text-center py-8">
+    <div className="text-lg font-medium text-gray-700 mb-4">{message}</div>
+    <div className="flex justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div>
     </div>
   </div>
 );
 
-// Error message component
+// Mobile-optimized error message
 const ErrorMessage = ({ message }: { message: string }) => (
-  <div className="text-center text-red-600">
-    <div className="text-base sm:text-lg">오류: {message}</div>
+  <div className="text-center py-8">
+    <div className="text-lg font-medium text-red-600 bg-red-50 rounded-lg p-4 border border-red-200">
+      ⚠️ 오류: {message}
+    </div>
   </div>
 );
 
@@ -198,100 +192,120 @@ export default function MainPage() {
     <>
       <Head>
         <title>Wine Tracker</title>
-        <meta name="description" content="Track your wine collection with OCR" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="description" content="모바일에서 와인 라벨을 촬영하여 와인 정보를 자동으로 기록하세요" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="theme-color" content="#3B82F6" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
       
-      <main className="min-h-screen bg-gray-50 py-4 sm:py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Responsive Typography */}
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center text-gray-900 mb-6 sm:mb-8">
-            와인 추적기
-          </h1>
+      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="container mx-auto px-4 py-6 max-w-md">
+          {/* Mobile-first header */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">🍷 와인 추적기</h1>
+            <p className="text-gray-600">라벨이나 영수증을 촬영해서 와인 정보를 기록하세요</p>
+          </div>
 
-          {/* Responsive Layout: Two columns on desktop, single column on mobile/tablet */}
-          <ResponsiveLayout>
-            <ResponsiveLayout.LeftColumn>
-              <ProcessingStep title="1. 이미지 업로드">
-                <div data-testid="upload-area">
-                  <ImageUpload onUpload={handleImageUpload} />
+          {/* Mobile-first single column layout */}
+          <MobileLayout>
+            <ProcessingStep title="📷 이미지 업로드" className="border-l-4 border-l-blue-500">
+              <div data-testid="upload-area">
+                <ImageUpload onUpload={handleImageUpload} />
+              </div>
+            </ProcessingStep>
+
+            {uploadedImageUrl && (
+              <ProcessingStep title="🎯 이미지 타입 선택" className="border-l-4 border-l-orange-500">
+                <ImageTypeSelector 
+                  onSelect={handleTypeSelection}
+                  selected={selectedType}
+                  autoDetected={autoDetected}
+                />
+                {selectedType && (
+                  <div className="mt-6">
+                    <button
+                      onClick={handleAnalysis}
+                      disabled={loading}
+                      className="w-full py-4 px-6 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-bold rounded-xl shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transform active:scale-95"
+                    >
+                      {loading ? '🔄 분석 중...' : '🚀 분석하기'}
+                    </button>
+                  </div>
+                )}
+              </ProcessingStep>
+            )}
+
+            {confirmationData && (
+              <ProcessingStep title="✅ 정보 확인 및 저장" className="border-l-4 border-l-purple-500">
+                <DataConfirmation
+                  type={confirmationData.type}
+                  data={confirmationData.extractedData}
+                  loading={loading}
+                  error={error}
+                  onConfirm={handleSaveToNotion}
+                  onCancel={handleCancelSave}
+                  onEdit={handleEditData}
+                />
+              </ProcessingStep>
+            )}
+
+            {processedData && !confirmationData && (
+              <ProcessingStep title="🎉 저장 완료!" className="border-l-4 border-l-green-500">
+                <div className="text-center py-6">
+                  <div className="text-6xl mb-4">✅</div>
+                  <h3 className="text-xl font-bold text-green-700 mb-2">Notion에 저장 완료!</h3>
+                  <p className="text-gray-600 mb-6">와인 정보가 성공적으로 저장되었습니다.</p>
+                  <button
+                    onClick={() => {
+                      setUploadedFile(null);
+                      setUploadedImageUrl('');
+                      setSelectedType(null);
+                      setProcessedData(null);
+                      setConfirmationData(null);
+                      setSuccess(false);
+                      setError('');
+                    }}
+                    className="w-full py-3 px-6 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors"
+                  >
+                    🔄 새로운 와인 추가하기
+                  </button>
                 </div>
               </ProcessingStep>
+            )}
 
-              {uploadedImageUrl && (
-                <ProcessingStep title="2. 이미지 타입 선택">
-                  <ImageTypeSelector 
-                    onSelect={handleTypeSelection}
-                    selected={selectedType}
-                    autoDetected={autoDetected}
-                  />
-                  {selectedType && (
-                    <div className="mt-4">
-                      <button
-                        onClick={handleAnalysis}
-                        disabled={loading}
-                        className="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                      >
-                        {loading ? '분석 중...' : '분석하기'}
-                      </button>
-                    </div>
-                  )}
-                </ProcessingStep>
-              )}
-            </ResponsiveLayout.LeftColumn>
+            {loading && !processedData && !confirmationData && (
+              <ProcessingStep title="" className="border-l-4 border-l-blue-500">
+                <LoadingSpinner message="AI가 이미지를 분석하고 있습니다..." />
+              </ProcessingStep>
+            )}
 
-            <ResponsiveLayout.RightColumn>
-              {confirmationData && (
-                <ProcessingStep title="3. 추출된 정보 확인">
-                  <DataConfirmation
-                    type={confirmationData.type}
-                    data={confirmationData.extractedData}
-                    loading={loading}
-                    error={error}
-                    onConfirm={handleSaveToNotion}
-                    onCancel={handleCancelSave}
-                    onEdit={handleEditData}
-                  />
-                </ProcessingStep>
-              )}
+            {error && !processedData && !confirmationData && (
+              <ProcessingStep title="" className="border-l-4 border-l-red-500">
+                <ErrorMessage message={error} />
+              </ProcessingStep>
+            )}
+          </MobileLayout>
 
-              {processedData && !confirmationData && (
-                <ProcessingStep title="4. 저장 완료">
-                  <ResultDisplay
-                    data={processedData.extractedData}
-                    type={processedData.type}
-                    loading={loading}
-                    success={success}
-                    error={error}
-                    onSave={handleSaveToNotion}
-                  />
-                </ProcessingStep>
-              )}
-
-              {loading && !processedData && !confirmationData && (
-                <ProcessingStep title="">
-                  <LoadingSpinner message="처리 중..." />
-                </ProcessingStep>
-              )}
-
-              {error && !processedData && !confirmationData && (
-                <ProcessingStep title="">
-                  <ErrorMessage message={error} />
-                </ProcessingStep>
-              )}
-            </ResponsiveLayout.RightColumn>
-          </ResponsiveLayout>
-
-          {/* Mobile-specific help text */}
-          <div className="mt-8 lg:hidden">
-            <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800">
-              <p className="font-medium mb-2">모바일 팁:</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>와인 라벨이나 영수증을 선명하게 촬영해주세요</li>
-                <li>조명이 밝은 곳에서 촬영하면 인식률이 높아집니다</li>
-              </ul>
-            </div>
+          {/* Mobile tips - always visible */}
+          <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+            <h3 className="text-lg font-bold text-blue-800 mb-3">📱 촬영 팁</h3>
+            <ul className="space-y-2 text-blue-700">
+              <li className="flex items-start space-x-2">
+                <span className="text-blue-500 mt-1">💡</span>
+                <span>밝은 곳에서 촬영하세요</span>
+              </li>
+              <li className="flex items-start space-x-2">
+                <span className="text-blue-500 mt-1">📐</span>
+                <span>라벨이 화면에 가득 차도록 가까이 촬영하세요</span>
+              </li>
+              <li className="flex items-start space-x-2">
+                <span className="text-blue-500 mt-1">🎯</span>
+                <span>글씨가 선명하게 보이도록 초점을 맞추세요</span>
+              </li>
+            </ul>
           </div>
         </div>
       </main>

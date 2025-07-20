@@ -23,8 +23,8 @@ const DataField = ({
   onChange?: (value: any) => void;
   type?: 'text' | 'number';
 }) => (
-  <div className="mb-3">
-    <label className="block text-sm font-medium text-gray-700 mb-1">
+  <div className="mb-4">
+    <label className="block text-sm font-bold text-gray-800 mb-2">
       {label}
     </label>
     {onChange ? (
@@ -32,11 +32,11 @@ const DataField = ({
         type={type}
         value={value || ''}
         onChange={(e) => onChange(type === 'number' ? Number(e.target.value) : e.target.value)}
-        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        className="w-full p-4 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
       />
     ) : (
-      <div className="p-2 bg-gray-50 border border-gray-200 rounded-md">
-        {value || '정보 없음'}
+      <div className="p-4 bg-gray-50 border-2 border-gray-200 rounded-xl text-lg">
+        {value || <span className="text-gray-400">정보 없음</span>}
       </div>
     )}
   </div>
@@ -232,28 +232,34 @@ export const DataConfirmation = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold text-gray-900">
-          {type === 'wine_label' ? '와인 정보 확인' : '영수증 정보 확인'}
-        </h3>
-        {!isEditing && (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
-          >
-            수정
-          </button>
-        )}
+    <div className="bg-white rounded-xl shadow-xl">
+      <div className="p-6 border-b border-gray-200">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-2xl font-bold text-gray-900">
+            {type === 'wine_label' ? '🍷 와인 정보' : '🧾 영수증 정보'}
+          </h3>
+          {!isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
+            >
+              ✏️ 수정
+            </button>
+          )}
+        </div>
+        <p className="text-gray-600">정보를 확인하고 Notion에 저장하세요</p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-700 text-sm">{error}</p>
+        <div className="mx-6 mt-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-center space-x-2">
+            <span className="text-red-500 text-xl">⚠️</span>
+            <p className="text-red-700 font-medium">{error}</p>
+          </div>
         </div>
       )}
 
-      <div className="mb-6 max-h-96 overflow-y-auto">
+      <div className="p-6 max-h-80 overflow-y-auto">
         {type === 'wine_label' ? (
           <WineDataDisplay
             data={editedData as WineInfo}
@@ -270,28 +276,34 @@ export const DataConfirmation = ({
       </div>
 
       {/* Auto-added fields notification */}
-      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-        <h4 className="text-sm font-medium text-blue-800 mb-2">자동 추가될 정보:</h4>
-        <ul className="text-xs text-blue-700 space-y-1">
-          <li>• 구매일자: {new Date().toLocaleDateString('ko-KR')} (분석 당일)</li>
-          <li>• 상태: 재고</li>
-        </ul>
+      <div className="mx-6 mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+        <h4 className="text-lg font-bold text-blue-800 mb-3">🤖 자동 추가 정보</h4>
+        <div className="space-y-2">
+          <div className="flex items-center space-x-2">
+            <span className="text-blue-600">📅</span>
+            <span className="text-blue-700 font-medium">구매일자: {new Date().toLocaleDateString('ko-KR')} (분석 당일)</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-blue-600">📦</span>
+            <span className="text-blue-700 font-medium">상태: 재고</span>
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="p-6 pt-0 space-y-3">
         {isEditing ? (
           <>
             <button
               onClick={handleSaveEdit}
-              className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              className="w-full py-4 px-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-lg font-bold rounded-xl shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 transform active:scale-95"
             >
-              수정 저장
+              ✅ 수정 저장
             </button>
             <button
               onClick={handleCancelEdit}
-              className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors"
+              className="w-full py-4 px-6 bg-gray-300 text-gray-700 text-lg font-bold rounded-xl hover:bg-gray-400 transition-colors"
             >
-              취소
+              ❌ 취소
             </button>
           </>
         ) : (
@@ -299,24 +311,24 @@ export const DataConfirmation = ({
             <button
               onClick={onConfirm}
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="w-full py-4 px-6 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-bold rounded-xl shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transform active:scale-95"
             >
-              {loading ? 'Notion에 저장 중...' : 'Notion에 저장'}
+              {loading ? '🔄 Notion에 저장 중...' : '💾 Notion에 저장'}
             </button>
             <button
               onClick={onCancel}
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors disabled:cursor-not-allowed"
+              className="w-full py-3 px-6 bg-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-400 transition-colors disabled:cursor-not-allowed"
             >
-              취소
+              🔙 다시 선택
             </button>
           </>
         )}
       </div>
 
       {loading && (
-        <div className="mt-4 flex justify-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500"></div>
+        <div className="p-6 pt-0 flex justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-green-500"></div>
         </div>
       )}
     </div>
