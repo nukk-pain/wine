@@ -25,7 +25,8 @@
       "Bash(fi)",
       "Bash([ -n \"$GEMINI_API_KEY\" ])",
       "Bash(cat:*)",
-      "Bash(npm run test:*)"
+      "Bash(npm run test:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
