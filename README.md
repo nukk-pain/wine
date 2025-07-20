@@ -42,8 +42,8 @@ sudo npm install -g pm2
 cd /volume2/web
 
 # 프로젝트 클론
-git clone <repository-url> wine-tracker
-cd wine-tracker
+git clone <repository-url> wine
+cd wine
 ```
 
 #### 의존성 설치 및 빌드
@@ -67,7 +67,7 @@ nano .env.local
 #### 필수 환경 변수
 ```env
 # Google APIs
-GOOGLE_APPLICATION_CREDENTIALS="/volume2/web/wine-tracker/vision.json"
+GOOGLE_APPLICATION_CREDENTIALS="/volume2/web/wine/vision.json"
 GEMINI_API_KEY="your-gemini-api-key-here"
 
 # Notion API
@@ -76,7 +76,7 @@ NOTION_DATABASE_ID="your-notion-database-id-here"
 
 # 환경 설정
 NODE_ENV="production"
-PORT=3000
+PORT=5959
 ```
 
 ### 4. Google API 설정
@@ -89,7 +89,7 @@ PORT=3000
 
 ```bash
 # 서비스 계정 키 파일 업로드
-scp path/to/your/vision.json user@nas-ip:/volume2/web/wine-tracker/
+scp path/to/your/vision.json user@nas-ip:/volume2/web/wine/
 ```
 
 #### Google Gemini API 설정
@@ -126,18 +126,18 @@ module.exports = {
     name: 'wine-tracker',
     script: 'npm',
     args: 'start',
-    cwd: '/volume2/web/wine-tracker',
+    cwd: '/volume2/web/wine',
     env: {
       NODE_ENV: 'production',
-      PORT: 3000
+      PORT: 5959
     },
     instances: 1,
     autorestart: true,
     watch: false,
     max_memory_restart: '1G',
-    log_file: '/volume2/web/wine-tracker/logs/combined.log',
-    out_file: '/volume2/web/wine-tracker/logs/out.log',
-    error_file: '/volume2/web/wine-tracker/logs/error.log',
+    log_file: '/volume2/web/wine/logs/combined.log',
+    out_file: '/volume2/web/wine/logs/out.log',
+    error_file: '/volume2/web/wine/logs/error.log',
     time: true
   }]
 };
@@ -166,7 +166,7 @@ server {
     server_name your-nas-domain.com;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:5959;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -195,7 +195,7 @@ npm run type-check
 
 ### 환경별 설정
 - **개발**: `http://localhost:3001`
-- **프로덕션**: `http://your-nas-ip:3000`
+- **프로덕션**: `http://your-nas-ip:5959`
 - **이미지 저장**: 
   - 개발: `public/wine-photos/`
   - 프로덕션: `/volume2/web/wine/wine-photos/`
@@ -229,7 +229,7 @@ pm2 start ecosystem.config.js
 ```bash
 # 환경 변수 확인
 echo $GOOGLE_APPLICATION_CREDENTIALS
-cat /volume2/web/wine-tracker/.env.local
+cat /volume2/web/wine/.env.local
 
 # vision.json 파일 권한 확인
 ls -la vision.json
@@ -244,16 +244,16 @@ chmod 600 vision.json
 #### 4. 포트 충돌
 ```bash
 # 포트 사용 확인
-netstat -tulpn | grep :3000
+netstat -tulpn | grep :5959
 
 # 다른 포트로 변경
-# .env.local에서 PORT=3001로 변경
+# .env.local에서 PORT=5960으로 변경
 ```
 
 ### 로그 확인
 ```bash
 # 애플리케이션 로그
-tail -f /volume2/web/wine-tracker/logs/combined.log
+tail -f /volume2/web/wine/logs/combined.log
 
 # PM2 로그
 pm2 logs wine-tracker --lines 100
@@ -280,7 +280,7 @@ journalctl -u pm2-root -f
 
 ```bash
 # 소스 코드 업데이트
-cd /volume2/web/wine-tracker
+cd /volume2/web/wine
 git pull origin main
 
 # 의존성 업데이트
