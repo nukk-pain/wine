@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__notion__list-databases",
+      "mcp__notion__query-database",
+      "mcp__notion__update-database",
+      "Bash(npm test:*)",
+      "Bash(ls:*)",
+      "Bash(npm install:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(npm run dev:*)",
+      "Bash(node:*)",
+      "Bash(rm:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(cp:*)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "Bash(npm run build:*)",
+      "Bash(npm run test:unit:*)",
+      "Bash(npm run test:integration:*)",
+      "Bash(if [ -f deployment/deploy-vision.sh ])",
+      "Bash(then chmod +x deployment/deploy-vision.sh)",
+      "Bash(fi)"
+    ],
+    "deny": []
+  }
+}
