@@ -57,6 +57,7 @@ interface ProcessedData {
 }
 
 export default function MainPage() {
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
   const [selectedType, setSelectedType] = useState<ImageType | null>(null);
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
@@ -66,11 +67,14 @@ export default function MainPage() {
   const [autoDetected, setAutoDetected] = useState<any>(null);
 
   const handleImageUpload = (file: File) => {
-    // Create URL for the uploaded file
+    // Store the file object
+    setUploadedFile(file);
+    
+    // Create URL for preview
     const imageUrl = URL.createObjectURL(file);
+    setUploadedImageUrl(imageUrl);
     
     // Reset state for new upload
-    setUploadedImageUrl(imageUrl);
     setSelectedType(null);
     setProcessedData(null);
     setLoading(false);
@@ -79,34 +83,31 @@ export default function MainPage() {
     setAutoDetected(null);
   };
 
-  const handleTypeSelection = async (type: ImageType) => {
+  const handleTypeSelection = (type: ImageType) => {
     setSelectedType(type);
-    
-    if (type === 'auto') {
-      // For auto detection, we would normally classify the image first
-      // For now, just proceed with processing
-      return;
-    }
+  };
 
-    // Process the image
-    await processImage(type);
+  const handleAnalysis = () => {
+    if (selectedType) {
+      processImage(selectedType);
+    }
   };
 
   const processImage = async (type: ImageType) => {
+    if (!uploadedFile) return;
+    
     setLoading(true);
     setError('');
+
+    const formData = new FormData();
+    formData.append('image', uploadedFile);
+    formData.append('type', type);
+    formData.append('useGemini', 'true');
 
     try {
       const response = await fetch('/api/process', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageUrl: uploadedImageUrl,
-          action: 'process_image',
-          type: type !== 'auto' ? type : undefined
-        }),
+        body: formData,
       });
 
       const result = await response.json();
@@ -191,6 +192,17 @@ export default function MainPage() {
                     selected={selectedType}
                     autoDetected={autoDetected}
                   />
+                  {selectedType && (
+                    <div className="mt-4">
+                      <button
+                        onClick={handleAnalysis}
+                        disabled={loading}
+                        className="w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      >
+                        {loading ? '분석 중...' : '분석하기'}
+                      </button>
+                    </div>
+                  )}
                 </ProcessingStep>
               )}
             </ResponsiveLayout.LeftColumn>

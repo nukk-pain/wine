@@ -24,7 +24,8 @@
       "Bash(then chmod +x deployment/deploy-vision.sh)",
       "Bash(fi)",
       "Bash([ -n \"$GEMINI_API_KEY\" ])",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npm run test:*)"
     ],
     "deny": []
   }

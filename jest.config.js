@@ -12,8 +12,19 @@ const customJestConfig = {
     '^@/components/(.*)$': '<rootDir>/components/$1',
     '^@/pages/(.*)$': '<rootDir>/pages/$1',
     '^@/lib/(.*)$': '<rootDir>/lib/$1',
+    '^@google/genai$': '<rootDir>/__mocks__/@google/genai.js',
   },
   testEnvironment: 'jest-environment-jsdom',
+  // Handle ES modules from @google/genai
+  transformIgnorePatterns: [
+    'node_modules/(?!(@google/genai)/)',
+  ],
+  extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  globals: {
+    'ts-jest': {
+      useESM: true,
+    },
+  },
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
