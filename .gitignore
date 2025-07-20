@@ -39,10 +39,36 @@ build/
 plan.md
 mock.md
 plan-ori.md
+GEMINI.MD
 
-# Test files
+# Test files and assets
 test1.jpg
 test2.jpg
+test-assets/
+test-results/
+__tests__/
+__mocks__/
+
+# Test and development artifacts
+coverage/
+logs/
+playwright-report/
+*.log
+
+# Development configuration files
+ecosystem.config.js
+server.js
+scripts/test-runner.js
+jest.config.js
+jest.setup.js
+playwright.config.ts
+
+# Temporary development files
+public/wine-photos/
+vision.json
+
+# Deployment scripts (if not needed in production)
+deployment/
 
 # IDE specific files
 .idea/
