@@ -331,6 +331,36 @@ describe('End-to-End Workflow Integration Tests', () => {
     });
   });
 
+  it('should process a wine label using Gemini for data refinement', async () => {
+    jest.setTimeout(20000); // OCR + Gemini 호출 시간 고려
+
+    // processWineImage는 내부적으로 test1.jpg의 OCR 결과를 사용하게 될 것입니다.
+    const result = await processWineImage('test1.jpg'); 
+    
+    // Gemini의 NLU 능력을 통해 기대할 수 있는 더 정확한 결과로 검증
+    expect(result.data.name.toLowerCase()).toContain('château margaux'.toLowerCase());
+    expect(result.data.vintage).toBe(2019);
+    expect(result.imageType).toBe('wine_label');
+  }, 20000);
+
+  it('should fallback to rule-based parser when Gemini fails', async () => {
+    // Mock Gemini to fail
+    const originalEnv = process.env.GEMINI_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    
+    try {
+      const result = await processWineImage('test1.jpg');
+      
+      // Should still work with rule-based parser
+      expect(result.imageType).toBe('wine_label');
+      expect(result.data.name).toBeDefined();
+      expect(result.data.name).toContain('MARGAUX'); // Rule-based parser result
+    } finally {
+      // Restore environment
+      process.env.GEMINI_API_KEY = originalEnv;
+    }
+  });
+
   it('should demonstrate concurrent workflow processing', async () => {
     const concurrentWorkflows = 3;
     const startTime = Date.now();

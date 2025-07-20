@@ -16,3 +16,7 @@ if (typeof global.TextEncoder === 'undefined') {
   global.TextEncoder = TextEncoder;
   global.TextDecoder = TextDecoder;
 }
+
+// Fetch polyfill for Node.js environment
+// Note: node-fetch v3 is ESM only, so we skip the polyfill
+// The @google/generative-ai library should handle this internally

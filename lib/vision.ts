@@ -10,6 +10,7 @@ import {
   getCacheStats 
 } from './vision-cache';
 import { getConfig, isServiceEnabled, getServiceTimeout } from './config';
+import { refineWineDataWithGemini } from './gemini';
 import fs from 'fs';
 import path from 'path';
 
@@ -61,21 +62,39 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
         case ImageType.WINE_LABEL:
           visionLogger.debug('Parsing wine label data', { requestId });
           const wineData = parseWineLabel(extractedText);
+          
+          let geminiData = null;
+          let usedGemini = false;
+          
+          try {
+            // Use Gemini to refine the OCR text
+            visionLogger.debug('Calling Gemini for data refinement', { requestId });
+            geminiData = await refineWineDataWithGemini(extractedText);
+            usedGemini = true;
+          } catch (geminiError) {
+            visionLogger.warn('Gemini refinement failed, falling back to rule-based parser', {
+              requestId,
+              error: geminiError instanceof Error ? geminiError.message : 'Unknown error'
+            });
+          }
+          
           // Map to WineData interface expected by ResultDisplay
+          // Prioritize Gemini results, fallback to rule-based parser
           parsedData = {
-            name: wineData.name || 'Unknown Wine',
-            vintage: wineData.vintage,
-            'Region/Producer': wineData.producer || wineData.region,
-            'Varietal(품종)': wineData.variety,
+            name: geminiData?.name || wineData.name || 'Unknown Wine',
+            vintage: geminiData?.vintage || wineData.vintage,
+            'Region/Producer': geminiData?.producer || wineData.producer || wineData.region || geminiData?.region,
+            'Varietal(품종)': geminiData?.grape_variety || wineData.variety,
             price: undefined,
             quantity: undefined
           };
           
           visionLogger.debug('Wine label parsing completed', {
             requestId,
-            hasName: !!wineData.name,
-            hasVintage: !!wineData.vintage,
-            hasProducer: !!(wineData.producer || wineData.region)
+            hasName: !!parsedData.name,
+            hasVintage: !!parsedData.vintage,
+            hasProducer: !!parsedData['Region/Producer'],
+            usedGemini
           });
           break;
           
