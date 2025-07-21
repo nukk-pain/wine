@@ -47,12 +47,15 @@ UPLOAD_DIR=/volume2/web/wine/wine-photos
 MAX_FILE_SIZE=10485760
 
 # DSM File Station API
-DSM_HOST=your-nas-ip
-DSM_PORT=5000
+DSM_HOST=file.shinon.synology.me
+DSM_PORT=443
 DSM_USERNAME=your_dsm_username
-DSM_PASSWORD=your_dsm_password
-DSM_SECURE=false
+# DSM_PASSWORD=your_dsm_password  # 보안상 사용하지 않음
+DSM_PASSWORD_ENCRYPTED=  # node scripts/encrypt-password.js 실행하여 생성
+DSM_SECURE=true
 DSM_UPLOAD_PATH=/wine-photos
+# 암호화 키 시크릿 (선택사항, 더 강한 보안을 위해)
+ENCRYPTION_SECRET=your_unique_secret_here
 
 # App Configuration
 BASE_URL=http://your-nas-ip:5959

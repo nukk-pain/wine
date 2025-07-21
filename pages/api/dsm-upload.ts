@@ -128,7 +128,7 @@ function validateFile(file: any) {
 async function uploadToDSM(file: any) {
   try {
     // DSM 클라이언트 생성
-    const dsmClient = createDSMClient();
+    const dsmClient = await createDSMClient();
     
     // 안전한 파일명 생성
     const timestamp = Date.now();

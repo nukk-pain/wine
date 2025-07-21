@@ -1,3 +1,5 @@
+import { CryptoUtil } from './crypto-util';
+
 interface DSMConfig {
   host: string;
   port: number;
@@ -50,7 +52,8 @@ export class DSMFileStationAuth {
       body = new FormData();
       Object.entries(data).forEach(([key, value]) => {
         if (value instanceof File) {
-          body.append(key, value);
+          // Node.js FormData requires Blob or string
+          body.append(key, value as any);
         } else {
           body.append(key, String(value));
         }
@@ -178,17 +181,33 @@ export class DSMFileStationAuth {
   }
 }
 
-export function createDSMClient(): DSMFileStationAuth {
+export async function createDSMClient(): Promise<DSMFileStationAuth> {
+  let password = '';
+  
+  // 암호화된 비밀번호가 있으면 복호화
+  if (process.env.DSM_PASSWORD_ENCRYPTED) {
+    try {
+      const systemKey = await CryptoUtil.getSystemKey();
+      password = CryptoUtil.decrypt(process.env.DSM_PASSWORD_ENCRYPTED, systemKey);
+    } catch (error) {
+      throw new Error('Failed to decrypt DSM password. Please check your encryption setup.');
+    }
+  } else if (process.env.DSM_PASSWORD) {
+    // 일반 비밀번호 (개발 환경용)
+    password = process.env.DSM_PASSWORD;
+    console.warn('⚠️  Warning: Using plain text password. Consider using encrypted password for production.');
+  }
+  
   const config: DSMConfig = {
     host: process.env.DSM_HOST || 'localhost',
     port: parseInt(process.env.DSM_PORT || '5000'),
     username: process.env.DSM_USERNAME || '',
-    password: process.env.DSM_PASSWORD || '',
+    password: password,
     secure: process.env.DSM_SECURE === 'true'
   };
 
   if (!config.username || !config.password) {
-    throw new Error('DSM credentials not configured. Please set DSM_USERNAME and DSM_PASSWORD environment variables.');
+    throw new Error('DSM credentials not configured. Please set DSM_USERNAME and DSM_PASSWORD/DSM_PASSWORD_ENCRYPTED environment variables.');
   }
 
   return new DSMFileStationAuth(config);

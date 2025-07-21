@@ -28,7 +28,8 @@
       "Bash(npm run test:*)",
       "Bash(git add:*)",
       "WebFetch(domain:global.download.synology.com)",
-      "WebFetch(domain:community.synology.com)"
+      "WebFetch(domain:community.synology.com)",
+      "Bash(chmod:*)"
     ],
     "deny": []
   }
