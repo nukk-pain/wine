@@ -79,14 +79,13 @@ export function ImageUpload({ onUpload }: ImageUploadProps) {
         onDragLeave={handleDragLeave}
         onClick={() => fileInputRef.current?.click()}
       >
-        <div className="text-6xl mb-4">📷</div>
-        <h3 className="text-xl font-bold mb-3 text-gray-800">사진 촬영하기</h3>
-        <p className="text-gray-600 mb-6">와인 라벨이나 영수증을 촬영해주세요</p>
+        <div className="text-6xl mb-4">🖼️</div>
+        <h3 className="text-xl font-bold mb-3 text-gray-800">이미지 업로드</h3>
+        <p className="text-gray-600 mb-6">와인 라벨이나 영수증 이미지를 선택해주세요</p>
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           onChange={handleFileChange}
           aria-label="이미지 파일 선택"
           className="hidden"
@@ -99,9 +98,9 @@ export function ImageUpload({ onUpload }: ImageUploadProps) {
             fileInputRef.current?.click();
           }}
         >
-          📱 카메라 열기
+          📂 갤러리에서 선택
         </button>
-        <p className="text-sm text-gray-500 mt-3">또는 갤러리에서 선택</p>
+        <p className="text-sm text-gray-500 mt-3">또는 이미지를 드래그하여 업로드</p>
       </div>
       
       {error && (
@@ -115,7 +114,7 @@ export function ImageUpload({ onUpload }: ImageUploadProps) {
       
       {previewUrl && (
         <div className="mt-6">
-          <h3 className="text-lg font-bold mb-3 text-gray-800">📸 촬영된 이미지</h3>
+          <h3 className="text-lg font-bold mb-3 text-gray-800">📸 선택된 이미지</h3>
           <div className="relative">
             <img 
               src={previewUrl} 

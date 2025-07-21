@@ -26,7 +26,9 @@
       "Bash([ -n \"$GEMINI_API_KEY\" ])",
       "Bash(cat:*)",
       "Bash(npm run test:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "WebFetch(domain:global.download.synology.com)",
+      "WebFetch(domain:community.synology.com)"
     ],
     "deny": []
   }

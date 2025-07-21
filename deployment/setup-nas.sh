@@ -29,7 +29,7 @@ pm2 startup
 pm2 save
 
 # 5. 방화벽 포트 열기 (DSM 7.0+)
-echo "Don't forget to open port 3000 in DSM Control Panel > External Access > Router Configuration"
+echo "Don't forget to open port 5959 in DSM Control Panel > External Access > Router Configuration"
 
 # 6. 환경 변수 파일 템플릿 생성
 cat > /volume2/web/wine/wine-tracker/.env.local << EOF
@@ -42,14 +42,22 @@ GOOGLE_CLOUD_PROJECT_ID=your_project_id
 GOOGLE_CLOUD_PRIVATE_KEY="your_private_key"
 GOOGLE_CLOUD_CLIENT_EMAIL=your_service_account@project.iam.gserviceaccount.com
 
-# File Upload
+# File Upload (Legacy)
 UPLOAD_DIR=/volume2/web/wine/wine-photos
 MAX_FILE_SIZE=10485760
 
+# DSM File Station API
+DSM_HOST=your-nas-ip
+DSM_PORT=5000
+DSM_USERNAME=your_dsm_username
+DSM_PASSWORD=your_dsm_password
+DSM_SECURE=false
+DSM_UPLOAD_PATH=/wine-photos
+
 # App Configuration
-BASE_URL=http://your-nas-ip:3000
+BASE_URL=http://your-nas-ip:5959
 NODE_ENV=production
-PORT=3000
+PORT=5959
 EOF
 
 echo "✅ NAS setup completed!"

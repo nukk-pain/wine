@@ -69,22 +69,49 @@ export default function MainPage() {
   const [error, setError] = useState<string>('');
   const [autoDetected, setAutoDetected] = useState<any>(null);
 
-  const handleImageUpload = (file: File) => {
-    // Store the file object
-    setUploadedFile(file);
-    
-    // Create URL for preview
-    const imageUrl = URL.createObjectURL(file);
-    setUploadedImageUrl(imageUrl);
-    
-    // Reset state for new upload
-    setSelectedType(null);
-    setProcessedData(null);
-    setConfirmationData(null);
-    setLoading(false);
-    setSuccess(false);
+  const handleImageUpload = async (file: File) => {
+    setLoading(true);
     setError('');
-    setAutoDetected(null);
+    
+    try {
+      // DSM File Station을 통한 업로드
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const uploadResponse = await fetch('/api/dsm-upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const uploadResult = await uploadResponse.json();
+      
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Upload failed');
+      }
+      
+      // Store the file object and upload result
+      setUploadedFile(file);
+      
+      // Create URL for preview
+      const imageUrl = URL.createObjectURL(file);
+      setUploadedImageUrl(imageUrl);
+      
+      // Reset state for new upload
+      setSelectedType(null);
+      setProcessedData(null);
+      setConfirmationData(null);
+      setLoading(false);
+      setSuccess(false);
+      setError('');
+      setAutoDetected(null);
+      
+      console.log('File uploaded via DSM:', uploadResult);
+      
+    } catch (error) {
+      setLoading(false);
+      setError(`업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+      console.error('Upload error:', error);
+    }
   };
 
   const handleTypeSelection = (type: ImageType) => {
