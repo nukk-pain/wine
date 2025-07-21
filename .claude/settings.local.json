@@ -29,7 +29,8 @@
       "Bash(git add:*)",
       "WebFetch(domain:global.download.synology.com)",
       "WebFetch(domain:community.synology.com)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(del C:GitHubwinepagesapiupload-blob.ts)"
     ],
     "deny": []
   }

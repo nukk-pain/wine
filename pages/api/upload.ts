@@ -3,6 +3,7 @@ import formidable from 'formidable';
 import fs from 'fs/promises';
 import path from 'path';
 import sharp from 'sharp';
+import { put } from '@vercel/blob';
 
 // Next.js bodyParser 비활성화 (파일 업로드를 위해)
 export const config = {
@@ -40,15 +41,25 @@ export default async function handler(
     }
 
     // 파일 저장 및 최적화
-    const savedFile = await saveAndOptimizeFile(file);
+    let savedFile;
+    
+    if (process.env.VERCEL) {
+      // Use Vercel Blob in Vercel environment
+      savedFile = await saveToVercelBlob(file);
+    } else {
+      // Use local file system in other environments
+      savedFile = await saveAndOptimizeFile(file);
+    }
 
     res.json({
       success: true,
       fileName: savedFile.fileName,
       filePath: savedFile.filePath,
-      fileUrl: `/uploads/${savedFile.fileName}`,
+      fileUrl: savedFile.fileUrl || `/uploads/${savedFile.fileName}`,
       fileSize: savedFile.fileSize,
-      optimized: savedFile.optimized
+      optimized: savedFile.optimized,
+      // Add URL for Vercel Blob compatibility
+      url: savedFile.url || savedFile.fileUrl || `/uploads/${savedFile.fileName}`
     });
 
   } catch (error: any) {
@@ -151,6 +162,39 @@ function validateFile(file: any) {
   }
 
   return { valid: true };
+}
+
+async function saveToVercelBlob(file: any) {
+  try {
+    // Read file data
+    const fileData = await fs.readFile(file.filepath);
+    
+    // Generate a unique filename
+    const timestamp = Date.now();
+    const originalExt = path.extname(file.originalFilename || 'image.jpg');
+    const fileName = `wine_${timestamp}${originalExt}`;
+    
+    // Upload to Vercel Blob
+    const blob = await put(fileName, fileData, {
+      access: 'public',
+      contentType: file.mimetype || 'image/jpeg',
+    });
+    
+    // Clean up temp file
+    await fs.unlink(file.filepath);
+    
+    return {
+      fileName: fileName,
+      filePath: blob.url,
+      fileUrl: blob.url,
+      url: blob.url,
+      fileSize: file.size,
+      optimized: true
+    };
+  } catch (error) {
+    console.error('Vercel Blob upload error:', error);
+    throw error;
+  }
 }
 
 async function saveAndOptimizeFile(file: any) {

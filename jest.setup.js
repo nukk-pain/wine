@@ -1,5 +1,8 @@
 import '@testing-library/jest-dom'
 
+// Load environment variables for tests
+require('dotenv').config({ path: '.env' })
+
 // Google Cloud Vision API를 위한 Node.js polyfill
 if (typeof global.setImmediate === 'undefined') {
   global.setImmediate = (callback, ...args) => {

@@ -74,11 +74,11 @@ export default function MainPage() {
     setError('');
     
     try {
-      // DSM File Station을 통한 업로드
+      // Upload to Vercel Blob or NAS based on environment
       const formData = new FormData();
       formData.append('file', file);
       
-      const uploadResponse = await fetch('/api/dsm-upload', {
+      const uploadResponse = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
@@ -92,8 +92,8 @@ export default function MainPage() {
       // Store the file object and upload result
       setUploadedFile(file);
       
-      // Create URL for preview
-      const imageUrl = URL.createObjectURL(file);
+      // For Vercel Blob, use the returned URL; for local, create object URL
+      const imageUrl = uploadResult.url || URL.createObjectURL(file);
       setUploadedImageUrl(imageUrl);
       
       // Reset state for new upload
@@ -105,7 +105,7 @@ export default function MainPage() {
       setError('');
       setAutoDetected(null);
       
-      console.log('File uploaded via DSM:', uploadResult);
+      console.log('File uploaded successfully:', uploadResult);
       
     } catch (error) {
       setLoading(false);
@@ -125,22 +125,42 @@ export default function MainPage() {
   };
 
   const processImage = async (type: ImageType) => {
-    if (!uploadedFile) return;
+    if (!uploadedFile && !uploadedImageUrl) return;
     
     setLoading(true);
     setError('');
 
-    const formData = new FormData();
-    formData.append('image', uploadedFile);
-    formData.append('type', type);
-    formData.append('useGemini', 'true');
-    formData.append('skipNotion', 'true'); // Skip Notion saving for now
-
     try {
-      const response = await fetch('/api/process', {
-        method: 'POST',
-        body: formData,
-      });
+      let response;
+      
+      // Check if we're in Vercel environment and have a blob URL
+      if (uploadedImageUrl && uploadedImageUrl.startsWith('https://')) {
+        // Use URL-based processing (Vercel Blob)
+        response = await fetch('/api/process', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageUrl: uploadedImageUrl,
+            type: type,
+            useGemini: 'true',
+            skipNotion: 'true'
+          }),
+        });
+      } else {
+        // Use form data processing (local file system)
+        const formData = new FormData();
+        formData.append('image', uploadedFile!);
+        formData.append('type', type);
+        formData.append('useGemini', 'true');
+        formData.append('skipNotion', 'true');
+
+        response = await fetch('/api/process', {
+          method: 'POST',
+          body: formData,
+        });
+      }
 
       const result = await response.json();
 

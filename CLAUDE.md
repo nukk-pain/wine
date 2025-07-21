@@ -145,3 +145,4 @@ The plan.md file contains a comprehensive development roadmap with 7 phases:
 - Do not use mock data in test environments
 - When testing, use files similar to actual files
   - In this project, test1.jpg and test2.jpg are the test files used to simulate real images
+- Never use mock data. if you need real data, just ask me.

@@ -15,7 +15,9 @@ const WINE_PHOTOS_DIR = process.env.NODE_ENV === 'production'
 
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
   },
 };
 
@@ -28,32 +30,67 @@ export default async function handler(
   }
 
   try {
-    // Parse form data
-    const form = formidable({
-      keepExtensions: true,
-      maxFileSize: 10 * 1024 * 1024, // 10MB
-    });
-    
-    const [fields, files] = await form.parse(req);
-    
-    const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
-    const type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
-    const useGemini = Array.isArray(fields.useGemini) ? fields.useGemini[0] : fields.useGemini;
-    const skipNotion = Array.isArray(fields.skipNotion) ? fields.skipNotion[0] : fields.skipNotion;
+    let imageFile: any = null;
+    let imageUrl: string | null = null;
+    let type: string | undefined;
+    let useGemini: string | undefined;
+    let skipNotion: string | undefined;
 
-    if (!imageFile) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No image file provided' 
+    // Detect request type based on Content-Type
+    const contentType = req.headers['content-type'] || '';
+    
+    if (contentType.includes('application/json')) {
+      // JSON request with imageUrl (Vercel Blob)
+      const body = req.body;
+      imageUrl = body.imageUrl;
+      type = body.type;
+      useGemini = body.useGemini;
+      skipNotion = body.skipNotion;
+      
+      if (!imageUrl) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'No imageUrl provided' 
+        });
+      }
+      
+      // Validate URL format
+      if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Invalid imageUrl format. Must be a valid HTTP(S) URL' 
+        });
+      }
+      
+    } else {
+      // Form data request (existing behavior)
+      const form = formidable({
+        keepExtensions: true,
+        maxFileSize: 10 * 1024 * 1024, // 10MB
       });
+      
+      const [fields, files] = await form.parse(req);
+      
+      imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
+      type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
+      useGemini = Array.isArray(fields.useGemini) ? fields.useGemini[0] : fields.useGemini;
+      skipNotion = Array.isArray(fields.skipNotion) ? fields.skipNotion[0] : fields.skipNotion;
+
+      if (!imageFile) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'No image file provided' 
+        });
+      }
     }
 
     logger.info('Processing image', {
-      filename: imageFile.originalFilename,
-      size: imageFile.size,
+      filename: imageFile?.originalFilename || 'URL-based',
+      size: imageFile?.size || 'unknown',
       type: type,
       useGemini: useGemini,
-      tempPath: imageFile.filepath
+      tempPath: imageFile?.filepath || imageUrl,
+      inputType: imageUrl ? 'url' : 'file'
     });
 
     let extractedData;
@@ -61,9 +98,23 @@ export default async function handler(
 
     if (useGemini === 'true') {
       try {
-        // Read image file for Gemini
-        const imageBuffer = await fs.readFile(imageFile.filepath);
-        const mimeType = imageFile.mimetype || 'image/jpeg';
+        let imageBuffer: Buffer;
+        let mimeType: string;
+        
+        if (imageUrl) {
+          // Fetch image from URL
+          const response = await fetch(imageUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch image from URL: ${response.statusText}`);
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          imageBuffer = Buffer.from(arrayBuffer);
+          mimeType = response.headers.get('content-type') || 'image/jpeg';
+        } else {
+          // Read image file for Gemini
+          imageBuffer = await fs.readFile(imageFile.filepath);
+          mimeType = imageFile.mimetype || 'image/jpeg';
+        }
         
         logger.info('Starting Gemini processing', { 
           imageType, 
@@ -103,28 +154,42 @@ export default async function handler(
         
         // Fallback to vision API
         logger.info('Falling back to Vision API');
-        const visionResult = await processWineImage(imageFile.filepath);
+        const imagePath = imageUrl || imageFile.filepath;
+        const visionResult = await processWineImage(imagePath);
         extractedData = visionResult.data;
         imageType = visionResult.imageType as 'wine_label' | 'receipt';
       }
     } else {
       // Use existing OCR-based processing
-      const visionResult = await processWineImage(imageFile.filepath);
+      const imagePath = imageUrl || imageFile.filepath;
+      const visionResult = await processWineImage(imagePath);
       extractedData = visionResult.data;
       imageType = visionResult.imageType as 'wine_label' | 'receipt';
     }
 
-    // 이미지를 영구 저장소로 이동
+    // 이미지를 영구 저장소로 이동 (file uploads only)
     let savedImagePath: string | null = null;
-    try {
-      savedImagePath = await saveImagePermanently(imageFile);
-    } catch (error) {
-      logger.warn('Failed to save image permanently', { 
-        filepath: imageFile.filepath,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      // 저장 실패 시 임시 파일 정리
-      await fs.unlink(imageFile.filepath).catch(() => {});
+    if (imageFile) {
+      try {
+        // In Vercel environment, we don't need to save files (they're already in Blob storage)
+        if (process.env.VERCEL) {
+          savedImagePath = 'stored-in-vercel-blob';
+          // Clean up temp file
+          await fs.unlink(imageFile.filepath).catch(() => {});
+        } else {
+          savedImagePath = await saveImagePermanently(imageFile);
+        }
+      } catch (error) {
+        logger.warn('Failed to save image permanently', { 
+          filepath: imageFile.filepath,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        // 저장 실패 시 임시 파일 정리
+        await fs.unlink(imageFile.filepath).catch(() => {});
+      }
+    } else if (imageUrl) {
+      // For URL-based processing, the image is already stored
+      savedImagePath = imageUrl;
     }
 
     // Skip Notion saving if requested
