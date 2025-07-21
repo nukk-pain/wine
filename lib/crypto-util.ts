@@ -85,20 +85,27 @@ export class CryptoUtil {
   /**
    * 파일 기반 암호화 키 관리
    */
-  static async getOrCreateFileKey(keyPath: string): Promise<string> {
+  static async getOrCreateFileKey(keyPath?: string): Promise<string> {
+    // 키 파일 경로가 지정되지 않으면 안전한 기본 경로 사용
+    const defaultKeyPath = process.env.NODE_ENV === 'production'
+      ? '/volume2/web/wine/.crypto-key'
+      : path.join(process.cwd(), '.crypto-key');
+    
+    const finalKeyPath = keyPath || defaultKeyPath;
+    
     try {
       // 키 파일이 존재하면 읽기
-      const key = await fs.readFile(keyPath, 'utf8');
+      const key = await fs.readFile(finalKeyPath, 'utf8');
       return key.trim();
     } catch (error) {
       // 키 파일이 없으면 생성
       const newKey = crypto.randomBytes(32).toString('hex');
       
       // 디렉토리 생성
-      await fs.mkdir(path.dirname(keyPath), { recursive: true });
+      await fs.mkdir(path.dirname(finalKeyPath), { recursive: true });
       
       // 키 파일 저장 (권한 제한)
-      await fs.writeFile(keyPath, newKey, { mode: 0o600 });
+      await fs.writeFile(finalKeyPath, newKey, { mode: 0o600 });
       
       return newKey;
     }

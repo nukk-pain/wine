@@ -5,12 +5,14 @@ echo "🔧 Setting up NAS environment for Wine Tracker..."
 # 1. 필요한 디렉토리 생성
 mkdir -p /volume2/web/wine/wine-tracker
 mkdir -p /volume2/web/wine/wine-photos
-mkdir -p /volume2/web/wine/wine-tracker/logs
+mkdir -p /volume2/web/wine/logs
+mkdir -p /volume2/web/wine/temp
 
 # 2. 권한 설정
 chmod 755 /volume2/web/wine/wine-tracker
 chmod 755 /volume2/web/wine/wine-photos
-chmod 755 /volume2/web/wine/wine-tracker/logs
+chmod 755 /volume2/web/wine/logs
+chmod 755 /volume2/web/wine/temp
 
 # 3. Node.js 및 PM2 설치 확인
 if ! command -v node &> /dev/null; then

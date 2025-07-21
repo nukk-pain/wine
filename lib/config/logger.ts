@@ -9,7 +9,9 @@ const config = getConfig();
 const logConfig = config.logging;
 
 // Ensure logs directory exists (only if file logging is enabled)
-const logsDir = path.join(process.cwd(), 'logs');
+const logsDir = process.env.NODE_ENV === 'production' 
+  ? '/volume2/web/wine/logs' 
+  : path.join(process.cwd(), 'logs');
 if (logConfig.fileLogging && !fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }

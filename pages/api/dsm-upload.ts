@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import fs from 'fs/promises';
 import { createDSMClient } from '../../lib/dsm-auth';
+import { ensureTempDir, getTempDir } from '../../lib/temp-utils';
 
 export const config = {
   api: {
@@ -21,6 +22,9 @@ export default async function handler(
   }
 
   try {
+    // 임시 디렉토리 생성
+    await ensureTempDir();
+    
     // 파일 파싱
     const { file, error } = await parseUploadedFile(req);
     if (error) {
@@ -56,7 +60,11 @@ export default async function handler(
 
 async function parseUploadedFile(req: NextApiRequest): Promise<{ file?: any; error?: string }> {
   return new Promise((resolve) => {
+    const tempDir = getTempDir();
+    
     const form = formidable({
+      uploadDir: tempDir,
+      keepExtensions: true,
       maxFileSize: MAX_FILE_SIZE,
       filter: ({ mimetype }) => {
         if (!mimetype) return false;
