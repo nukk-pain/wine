@@ -9,6 +9,8 @@ export interface NotionWineProperties {
   'Store': string;
   'Varietal(품종)': string[];
   'Image': string | null;
+  'Status'?: string;
+  'Purchase date'?: string;
 }
 
 export interface NotionPropertyMapping {
@@ -77,7 +79,9 @@ export const NOTION_PROPERTY_NAMES = {
   QUANTITY: 'Quantity',
   STORE: 'Store',
   VARIETAL: 'Varietal(품종)',
-  IMAGE: 'Image'
+  IMAGE: 'Image',
+  STATUS: 'Status',
+  PURCHASE_DATE: 'Purchase date'
 } as const;
 
 export function mapToNotionProperties(wineData: NotionWineProperties): Record<string, any> {
@@ -161,6 +165,24 @@ export function mapToNotionProperties(wineData: NotionWineProperties): Record<st
       ]
     };
   }
+
+  // Always set Status to '재고' and Quantity to 1
+  properties[NOTION_PROPERTY_NAMES.STATUS] = {
+    select: {
+      name: '재고'
+    }
+  };
+
+  properties[NOTION_PROPERTY_NAMES.QUANTITY] = {
+    number: 1
+  };
+
+  // Set Purchase date to current date
+  properties[NOTION_PROPERTY_NAMES.PURCHASE_DATE] = {
+    date: {
+      start: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+    }
+  };
 
   return properties;
 }

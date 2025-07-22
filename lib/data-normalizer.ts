@@ -6,54 +6,65 @@
  */
 export function normalizeWineData(rawData: any): any {
   const normalized: any = {
-    name: rawData.wine_name || rawData.name || 'Unknown Wine',
+    name: rawData.Name || rawData.wine_name || rawData.name || 'Unknown Wine',
   };
 
   // Convert vintage to number if it's a string
-  if (rawData.vintage) {
-    if (typeof rawData.vintage === 'string') {
-      const vintageNum = parseInt(rawData.vintage, 10);
+  const vintage = rawData.Vintage || rawData.vintage;
+  if (vintage) {
+    if (typeof vintage === 'string') {
+      const vintageNum = parseInt(vintage, 10);
       if (!isNaN(vintageNum)) {
         normalized.vintage = vintageNum;
       }
-    } else if (typeof rawData.vintage === 'number') {
-      normalized.vintage = rawData.vintage;
+    } else if (typeof vintage === 'number') {
+      normalized.vintage = vintage;
     }
   }
 
   // Convert price to number if it's a string
-  if (rawData.price) {
-    if (typeof rawData.price === 'string') {
-      const priceNum = parseFloat(rawData.price.replace(/[$,]/g, ''));
+  const price = rawData.Price || rawData.price;
+  if (price) {
+    if (typeof price === 'string') {
+      const priceNum = parseFloat(price.replace(/[$,]/g, ''));
       if (!isNaN(priceNum)) {
         normalized.price = priceNum;
       }
-    } else if (typeof rawData.price === 'number') {
-      normalized.price = rawData.price;
+    } else if (typeof price === 'number') {
+      normalized.price = price;
     }
   }
 
   // Convert quantity to number if it's a string
-  if (rawData.quantity) {
-    if (typeof rawData.quantity === 'string') {
-      const quantityNum = parseInt(rawData.quantity, 10);
+  const quantity = rawData.Quantity || rawData.quantity;
+  if (quantity) {
+    if (typeof quantity === 'string') {
+      const quantityNum = parseInt(quantity, 10);
       if (!isNaN(quantityNum)) {
         normalized.quantity = quantityNum;
       }
-    } else if (typeof rawData.quantity === 'number') {
-      normalized.quantity = rawData.quantity;
+    } else if (typeof quantity === 'number') {
+      normalized.quantity = quantity;
     }
   }
 
   // Map extracted fields to Notion field names
-  if (rawData.producer) {
+  if (rawData['Region/Producer']) {
+    normalized['Region/Producer'] = rawData['Region/Producer'];
+  } else if (rawData.producer) {
     normalized['Region/Producer'] = rawData.producer;
   } else if (rawData.region) {
     normalized['Region/Producer'] = rawData.region;
   }
 
-  if (rawData.varietal) {
+  if (rawData['Varietal(품종)']) {
+    normalized['Varietal(품종)'] = Array.isArray(rawData['Varietal(품종)']) ? rawData['Varietal(품종)'].join(', ') : rawData['Varietal(품종)'];
+  } else if (rawData.varietal) {
     normalized['Varietal(품종)'] = rawData.varietal;
+  }
+
+  if (rawData.Store || rawData.store) {
+    normalized.store = rawData.Store || rawData.store;
   }
 
   return normalized;

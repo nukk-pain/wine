@@ -88,13 +88,13 @@ export function BatchResultDisplay({
   // Convert extracted data to Notion format
   const convertToNotionFormat = (extractedData: any): NotionWineProperties => {
     return {
-      'Name': extractedData.wine_name || '',
-      'Vintage': extractedData.vintage ? parseInt(extractedData.vintage) : null,
-      'Region/Producer': [extractedData.region, extractedData.producer].filter(Boolean).join(', '),
-      'Price': extractedData.price ? parseFloat(extractedData.price) : null,
-      'Quantity': 1,
-      'Store': '',
-      'Varietal(품종)': extractedData.varietal ? [extractedData.varietal] : [],
+      'Name': extractedData.Name || extractedData.wine_name || '',
+      'Vintage': extractedData.Vintage || extractedData.vintage ? parseInt(extractedData.Vintage || extractedData.vintage) : null,
+      'Region/Producer': extractedData['Region/Producer'] || [extractedData.region, extractedData.producer].filter(Boolean).join(', ') || '',
+      'Price': extractedData.Price || extractedData.price ? parseFloat(extractedData.Price || extractedData.price) : null,
+      'Quantity': extractedData.Quantity || 1,
+      'Store': extractedData.Store || '',
+      'Varietal(품종)': Array.isArray(extractedData['Varietal(품종)']) ? extractedData['Varietal(품종)'] : (extractedData.varietal ? [extractedData.varietal] : []),
       'Image': null
     };
   };
@@ -135,8 +135,6 @@ export function BatchResultDisplay({
 
   // Save individual item
   const saveIndividualItem = async (itemId: string) => {
-    if (!onSaveIndividual) return;
-    
     const editState = editingState[itemId];
     if (!editState) return;
 
@@ -145,28 +143,33 @@ export function BatchResultDisplay({
       [itemId]: { ...prev[itemId], isSaving: true }
     }));
 
-    try {
-      const success = await onSaveIndividual(itemId, editState.editedData);
-      if (success) {
-        // Clear editing state on success
-        setEditingState(prev => {
-          const newState = { ...prev };
-          delete newState[itemId];
-          return newState;
+    // Simulate saving delay
+    setTimeout(() => {
+      // Update the actual item data with edited values
+      const item = items.find(item => item.id === itemId);
+      if (item && item.result && item.result.extractedData) {
+        // Update the extracted data with edited values
+        Object.assign(item.result.extractedData, {
+          Name: editState.editedData.Name,
+          Vintage: editState.editedData.Vintage,
+          'Region/Producer': editState.editedData['Region/Producer'],
+          Price: editState.editedData.Price,
+          Quantity: editState.editedData.Quantity,
+          Store: editState.editedData.Store,
+          'Varietal(품종)': editState.editedData['Varietal(품종)']
         });
-      } else {
-        // Reset saving state on failure
-        setEditingState(prev => ({
-          ...prev,
-          [itemId]: { ...prev[itemId], isSaving: false }
-        }));
       }
-    } catch (error) {
-      setEditingState(prev => ({
-        ...prev,
-        [itemId]: { ...prev[itemId], isSaving: false }
-      }));
-    }
+
+      // Clear editing state and show success
+      setEditingState(prev => {
+        const newState = { ...prev };
+        delete newState[itemId];
+        return newState;
+      });
+      
+      // Show success message
+      alert('✅ 수정내용이 저장되었습니다!');
+    }, 500);
   };
 
   // Add manual wine entry
@@ -309,37 +312,48 @@ export function BatchResultDisplay({
     }
 
     return (
-      <div className="mt-3 text-sm space-y-3">
-        {data.wine_name && (
-          <div className="font-medium text-gray-800">
-            🍷 {data.wine_name}
+      <div className="mt-3 space-y-3">
+        {(data.Name || data.wine_name) && (
+          <div className="text-lg font-bold text-gray-900">
+            {data.Name || data.wine_name}
           </div>
         )}
-        <div className="flex flex-wrap gap-2 text-xs text-gray-600">
-          {data.vintage && (
-            <span className="bg-gray-100 px-2 py-1 rounded">
-              📅 {data.vintage}년
-            </span>
+        <div className="space-y-2 text-sm">
+          {(data.Vintage || data.vintage) && (
+            <div className="flex items-center">
+              <span className="text-gray-600 w-24">📅 빈티지:</span>
+              <span className="text-gray-800 font-medium">{data.Vintage || data.vintage}년</span>
+            </div>
           )}
-          {data.producer && (
-            <span className="bg-gray-100 px-2 py-1 rounded">
-              🏭 {data.producer}
-            </span>
+          {(data['Region/Producer'] || data.producer || data.region) && (
+            <div className="flex items-center">
+              <span className="text-gray-600 w-24">🏭 생산자:</span>
+              <span className="text-gray-800">{data['Region/Producer'] || data.producer || data.region}</span>
+            </div>
           )}
-          {data.region && (
-            <span className="bg-gray-100 px-2 py-1 rounded">
-              📍 {data.region}
-            </span>
+          {(data['Varietal(품종)'] || data.varietal) && (
+            <div className="flex items-center">
+              <span className="text-gray-600 w-24">🍇 품종:</span>
+              <span className="text-gray-800">{Array.isArray(data['Varietal(품종)']) ? data['Varietal(품종)'].join(', ') : data['Varietal(품종)'] || data.varietal}</span>
+            </div>
           )}
-          {data.varietal && (
-            <span className="bg-gray-100 px-2 py-1 rounded">
-              🍇 {data.varietal}
-            </span>
+          {(data.Price || data.price) && (
+            <div className="flex items-center">
+              <span className="text-gray-600 w-24">💰 가격:</span>
+              <span className="text-gray-800 font-medium">${data.Price || data.price}</span>
+            </div>
           )}
-          {data.price && (
-            <span className="bg-gray-100 px-2 py-1 rounded">
-              💰 ${data.price}
-            </span>
+          {(data.Quantity || data.quantity) && (
+            <div className="flex items-center">
+              <span className="text-gray-600 w-24">📦 수량:</span>
+              <span className="text-gray-800">{data.Quantity || data.quantity}병</span>
+            </div>
+          )}
+          {(data.Store || data.store) && (
+            <div className="flex items-center">
+              <span className="text-gray-600 w-24">🏪 구매처:</span>
+              <span className="text-gray-800">{data.Store || data.store}</span>
+            </div>
           )}
         </div>
         
@@ -529,7 +543,7 @@ export function BatchResultDisplay({
             } disabled:opacity-50 disabled:cursor-not-allowed`}
             title={!getValidationForItem(itemId).isValid ? '필수 정보를 모두 입력하고 오류를 수정해주세요' : ''}
           >
-            {isSaving ? '💾 저장 중...' : getValidationForItem(itemId).isValid ? '💾 저장' : '⚠️ 오류 수정 필요'}
+            {isSaving ? '⚙️ 수정 중...' : getValidationForItem(itemId).isValid ? '✅ 수정완료' : '⚠️ 오류 수정 필요'}
           </button>
           <button
             onClick={() => cancelEditing(itemId)}
@@ -765,7 +779,7 @@ export function BatchResultDisplay({
             <span>수동 추가 와인 ({manualWines.length}개)</span>
           </h3>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-6">
             {manualWines.map((manualWine) => (
               <div key={manualWine.id}>
                 {renderManualWineForm(manualWine)}
@@ -827,7 +841,7 @@ export function BatchResultDisplay({
             <span>성공한 분석 ({completedItems.length}개)</span>
           </h3>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-6">
             {completedItems.map((item) => (
               <div key={item.id} className="bg-white rounded-xl shadow-lg border-2 border-green-200 overflow-hidden">
                 {/* Checkbox and Image */}
@@ -835,24 +849,24 @@ export function BatchResultDisplay({
                   <img 
                     src={item.url} 
                     alt={`분석된 와인 이미지 ${item.id}`}
-                    className="w-full h-32 object-cover"
+                    className="w-full h-64 object-contain bg-gray-50"
                   />
-                  <div className="absolute top-2 left-2">
+                  <div className="absolute top-3 left-3">
                     <input
                       type="checkbox"
                       checked={selectedItems.has(item.id)}
                       onChange={(e) => handleItemSelection(item.id, e.target.checked)}
-                      className="w-5 h-5 text-green-600 border-white border-2 rounded focus:ring-green-500 shadow-lg"
+                      className="w-6 h-6 text-green-600 border-white border-2 rounded focus:ring-green-500 shadow-lg"
                     />
                   </div>
-                  <div className="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                    ✅ 완료
+                  <div className="absolute top-3 right-3 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
+                    ✅ 분석 완료
                   </div>
                 </div>
 
                 {/* Wine Information */}
-                <div className="p-4">
-                  <div className="text-xs text-gray-500 mb-2 truncate" title={item.file.name}>
+                <div className="p-6">
+                  <div className="text-sm text-gray-500 mb-3" title={item.file.name}>
                     📁 {item.file.name}
                   </div>
                   {renderWineInfo(item)}
@@ -871,7 +885,7 @@ export function BatchResultDisplay({
             <span>실패한 분석 ({errorItems.length}개)</span>
           </h3>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-6">
             {errorItems.map((item) => (
               <div key={item.id} className="bg-white rounded-xl shadow-lg border-2 border-red-200 overflow-hidden">
                 {/* Image */}
@@ -879,20 +893,20 @@ export function BatchResultDisplay({
                   <img 
                     src={item.url} 
                     alt={`실패한 와인 이미지 ${item.id}`}
-                    className="w-full h-32 object-cover opacity-75"
+                    className="w-full h-64 object-contain bg-gray-50 opacity-75"
                   />
-                  <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                    ❌ 실패
+                  <div className="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
+                    ❌ 분석 실패
                   </div>
                 </div>
 
                 {/* Error Information */}
-                <div className="p-4">
-                  <div className="text-xs text-gray-500 mb-2 truncate" title={item.file.name}>
+                <div className="p-6">
+                  <div className="text-sm text-gray-500 mb-3" title={item.file.name}>
                     📁 {item.file.name}
                   </div>
                   {item.error && (
-                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                    <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-200">
                       ⚠️ {item.error}
                     </div>
                   )}

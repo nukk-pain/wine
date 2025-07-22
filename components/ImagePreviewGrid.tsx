@@ -151,13 +151,13 @@ export function ImagePreviewGrid({
               {/* 결과 미리보기 */}
               {item.status === 'completed' && item.result && (
                 <div className="mt-2 text-xs text-green-600">
-                  {item.result.extractedData?.wine_name && (
-                    <div className="truncate" title={item.result.extractedData.wine_name}>
-                      🍷 {item.result.extractedData.wine_name}
+                  {(item.result.extractedData?.Name || item.result.extractedData?.wine_name) && (
+                    <div className="truncate" title={item.result.extractedData.Name || item.result.extractedData.wine_name}>
+                      🍷 {item.result.extractedData.Name || item.result.extractedData.wine_name}
                     </div>
                   )}
-                  {item.result.extractedData?.vintage && (
-                    <div>{item.result.extractedData.vintage}년</div>
+                  {(item.result.extractedData?.Vintage || item.result.extractedData?.vintage) && (
+                    <div>{item.result.extractedData.Vintage || item.result.extractedData.vintage}년</div>
                   )}
                 </div>
               )}

@@ -765,13 +765,6 @@ export default function MainPage() {
             {/* Multiple images preview and progress */}
             {multipleMode && processingItems.length > 0 && (
               <>
-                <ProcessingStep title="📸 선택된 이미지들" className="border-l-4 border-l-green-500">
-                  <ImagePreviewGrid 
-                    items={processingItems}
-                    onRemove={handleRemoveImage}
-                    onRetry={handleRetryImage}
-                  />
-                </ProcessingStep>
 
                 <ProcessingStep title="📊 분석 진행상황" className="border-l-4 border-l-yellow-500">
                   <ProcessingProgress items={processingItems} />
@@ -889,38 +882,7 @@ export default function MainPage() {
             )}
           </MobileLayout>
 
-          {/* Mobile tips - always visible */}
-          <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-            <h3 className="text-lg font-bold text-blue-800 mb-3">
-              📱 {multipleMode ? '다중 이미지 촬영 팁' : '촬영 팁'}
-            </h3>
-            <ul className="space-y-2 text-blue-700">
-              <li className="flex items-start space-x-2">
-                <span className="text-blue-500 mt-1">💡</span>
-                <span>밝은 곳에서 촬영하세요</span>
-              </li>
-              <li className="flex items-start space-x-2">
-                <span className="text-blue-500 mt-1">📐</span>
-                <span>라벨이 화면에 가득 차도록 가까이 촬영하세요</span>
-              </li>
-              <li className="flex items-start space-x-2">
-                <span className="text-blue-500 mt-1">🎯</span>
-                <span>글씨가 선명하게 보이도록 초점을 맞추세요</span>
-              </li>
-              {multipleMode && (
-                <>
-                  <li className="flex items-start space-x-2">
-                    <span className="text-blue-500 mt-1">📂</span>
-                    <span>여러 이미지를 한 번에 선택하거나 드래그하여 업로드하세요</span>
-                  </li>
-                  <li className="flex items-start space-x-2">
-                    <span className="text-blue-500 mt-1">⚡</span>
-                    <span>모든 이미지가 업로드된 후 일괄 분석하여 시간을 절약하세요</span>
-                  </li>
-                </>
-              )}
-            </ul>
-          </div>
+         
         </div>
       </main>
     </>

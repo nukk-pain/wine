@@ -67,6 +67,20 @@ export default async function handler(
           req.on('error', reject);
         });
         
+        // Check if rawBody is empty before parsing
+        if (!rawBody || rawBody.trim() === '') {
+          console.error('❌ [API] Empty request body received');
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Empty request body' 
+          });
+        }
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📋 [API] Raw body before parsing:', rawBody);
+          console.log('   Raw body length:', rawBody.length);
+        }
+        
         body = JSON.parse(rawBody);
         
         if (process.env.NODE_ENV === 'development') {
