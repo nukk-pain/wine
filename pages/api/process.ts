@@ -273,8 +273,14 @@ export default async function handler(
         // Extract information based on type
         if (imageType === 'wine_label') {
           extractedData = await geminiService.extractWineInfo(imageBuffer, mimeType);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🍷 [API] Gemini wine data extracted:', JSON.stringify(extractedData, null, 2));
+          }
         } else if (imageType === 'receipt') {
           extractedData = await geminiService.extractReceiptInfo(imageBuffer, mimeType);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🧾 [API] Gemini receipt data extracted:', JSON.stringify(extractedData, null, 2));
+          }
         }
         
         console.log('Gemini processing completed:', { imageType, hasData: !!extractedData });
@@ -346,6 +352,10 @@ export default async function handler(
     if (imageType === 'wine_label') {
       // Normalize data to ensure correct types
       const normalizedData = normalizeWineData(extractedData);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 [API] Data after normalization:', JSON.stringify(normalizedData, null, 2));
+        console.log('🚀 [API] About to save to Notion...');
+      }
       notionResult = await saveWineToNotion(normalizedData, 'wine_label');
       
       return res.status(200).json({
@@ -355,7 +365,13 @@ export default async function handler(
           extractedData: extractedData,
           notionResult: notionResult,
           savedImagePath: savedImagePath
-        }
+        },
+        // Include debug info in development or when requested
+        debug: process.env.NODE_ENV === 'development' || req.query.debug ? {
+          geminiRawData: extractedData,
+          normalizedData: normalizedData,
+          finalNotionData: notionResult
+        } : undefined
       });
     } else if (imageType === 'receipt') {
       notionResults = await saveReceiptToNotion(extractedData);
@@ -367,7 +383,12 @@ export default async function handler(
           extractedData: extractedData,
           notionResults: notionResults,
           savedImagePath: savedImagePath
-        }
+        },
+        // Include debug info in development or when requested
+        debug: process.env.NODE_ENV === 'development' || req.query.debug ? {
+          geminiRawData: extractedData,
+          finalNotionResults: notionResults
+        } : undefined
       });
     }
 

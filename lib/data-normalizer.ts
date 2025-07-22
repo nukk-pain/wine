@@ -5,13 +5,20 @@
  * Converts string numbers to actual numbers and maps field names
  */
 export function normalizeWineData(rawData: any): any {
-  const normalized: any = {
-    name: rawData.Name || rawData.wine_name || rawData.name || 'Unknown Wine',
-  };
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔄 [Normalizer] Input data:', JSON.stringify(rawData, null, 2));
+  }
+  
+  // 🚨 CRITICAL: Gemini API returns data with exact Notion field names!
+  // We should preserve them instead of changing them
+  const normalized: any = {};
 
-  // Convert vintage to number if it's a string
+  // Name field (most critical)
+  normalized.name = rawData.Name || rawData.wine_name || rawData.name || 'Unknown Wine';
+
+  // Convert vintage to number if it's a string  
   const vintage = rawData.Vintage || rawData.vintage;
-  if (vintage) {
+  if (vintage !== null && vintage !== undefined) {
     if (typeof vintage === 'string') {
       const vintageNum = parseInt(vintage, 10);
       if (!isNaN(vintageNum)) {
@@ -24,7 +31,7 @@ export function normalizeWineData(rawData: any): any {
 
   // Convert price to number if it's a string
   const price = rawData.Price || rawData.price;
-  if (price) {
+  if (price !== null && price !== undefined) {
     if (typeof price === 'string') {
       const priceNum = parseFloat(price.replace(/[$,]/g, ''));
       if (!isNaN(priceNum)) {
@@ -37,7 +44,7 @@ export function normalizeWineData(rawData: any): any {
 
   // Convert quantity to number if it's a string
   const quantity = rawData.Quantity || rawData.quantity;
-  if (quantity) {
+  if (quantity !== null && quantity !== undefined) {
     if (typeof quantity === 'string') {
       const quantityNum = parseInt(quantity, 10);
       if (!isNaN(quantityNum)) {
@@ -48,7 +55,7 @@ export function normalizeWineData(rawData: any): any {
     }
   }
 
-  // Map extracted fields to Notion field names
+  // 🚨 CRITICAL: Preserve exact Notion field names from Gemini
   if (rawData['Region/Producer']) {
     normalized['Region/Producer'] = rawData['Region/Producer'];
   } else if (rawData.producer) {
@@ -57,15 +64,25 @@ export function normalizeWineData(rawData: any): any {
     normalized['Region/Producer'] = rawData.region;
   }
 
+  // 🚨 CRITICAL: Handle varietals as array from Gemini  
   if (rawData['Varietal(품종)']) {
-    normalized['Varietal(품종)'] = Array.isArray(rawData['Varietal(품종)']) ? rawData['Varietal(품종)'].join(', ') : rawData['Varietal(품종)'];
+    if (Array.isArray(rawData['Varietal(품종)'])) {
+      normalized['Varietal(품종)'] = rawData['Varietal(품종)'].join(', ');
+    } else {
+      normalized['Varietal(품종)'] = rawData['Varietal(품종)'];
+    }
   } else if (rawData.varietal) {
     normalized['Varietal(품종)'] = rawData.varietal;
   }
 
+  // Store field
   if (rawData.Store || rawData.store) {
-    normalized.store = rawData.Store || rawData.store;
+    normalized.Store = rawData.Store || rawData.store;
   }
 
+  if (process.env.NODE_ENV === 'development') {
+    console.log('✅ [Normalizer] Output data:', JSON.stringify(normalized, null, 2));
+  }
+  
   return normalized;
 }

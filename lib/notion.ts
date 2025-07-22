@@ -64,17 +64,30 @@ export async function saveWineToNotionV2(wineData: NotionWineProperties): Promis
 
 // Legacy function - maintained for backwards compatibility
 export async function saveWineToNotion(wineData: WineData, source: 'wine_label' | 'receipt') {
+  if (process.env.NODE_ENV === 'development') {
+    console.log('💾 [NOTION] Legacy saveWineToNotion called with:', JSON.stringify(wineData, null, 2));
+    console.log('💾 [NOTION] Source:', source);
+  }
+  
   // Convert legacy WineData to NotionWineProperties
   const notionData: NotionWineProperties = {
-    'Name': wineData.name,
+    'Name': wineData.name || 'Unknown Wine',
     'Vintage': wineData.vintage || null,
     'Region/Producer': wineData['Region/Producer'] || '',
     'Price': wineData.price || null,
     'Quantity': wineData.quantity || null,
     'Store': wineData.Store || '',
-    'Varietal(품종)': wineData['Varietal(품종)'] ? wineData['Varietal(품종)'].split(',').map(v => v.trim()) : [],
+    'Varietal(품종)': wineData['Varietal(품종)'] ? 
+      (Array.isArray(wineData['Varietal(품종)']) ? 
+        wineData['Varietal(품종)'] : 
+        wineData['Varietal(품종)'].split(',').map(v => v.trim())
+      ) : [],
     'Image': null
   };
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('💾 [NOTION] Converted to NotionWineProperties:', JSON.stringify(notionData, null, 2));
+  }
 
   return saveWineToNotionV2(notionData);
 }
