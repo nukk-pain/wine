@@ -166,39 +166,55 @@ export default function MainPage() {
         console.log(`📋 [CLIENT] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} files)`);
         
         try {
-          const formData = new FormData();
-          batch.forEach(file => {
-            formData.append('files', file);
-          });
+          // Use individual uploads instead of batch upload API
+          const batchResults = await Promise.allSettled(
+            batch.map(async (file, fileIndex) => {
+              const formData = new FormData();
+              formData.append('file', file);
+              
+              const uploadResponse = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+              });
+              
+              if (!uploadResponse.ok) {
+                throw new Error(`HTTP Error: ${uploadResponse.status} ${uploadResponse.statusText}`);
+              }
+              
+              const result = await uploadResponse.json();
+              if (!result.success) {
+                throw new Error(result.error || 'Upload failed');
+              }
+              
+              return result;
+            })
+          );
           
-          const uploadResponse = await fetch('/api/upload-multiple', {
-            method: 'POST',
-            body: formData,
-          });
-          
-          if (!uploadResponse.ok) {
-            throw new Error(`HTTP Error: ${uploadResponse.status} ${uploadResponse.statusText}`);
-          }
-          
-          let uploadResult;
-          try {
-            const responseText = await uploadResponse.text();
-            console.log(`📝 [CLIENT] Batch ${batchIndex + 1} response length:`, responseText.length);
-            
-            if (!responseText.trim()) {
-              throw new Error('Empty response from server');
+          // Convert Promise.allSettled results to upload results format
+          const uploadResults = batchResults.map((result, index) => {
+            if (result.status === 'fulfilled') {
+              return {
+                success: true,
+                fileUrl: result.value.url || result.value.fileUrl,
+                fileName: result.value.fileName,
+                fileSize: result.value.fileSize
+              };
+            } else {
+              return {
+                success: false,
+                error: result.reason?.message || 'Upload failed'
+              };
             }
-            
-            uploadResult = JSON.parse(responseText);
-          } catch (parseError) {
-            console.error('JSON parse error:', parseError);
-            throw new Error(`Batch ${batchIndex + 1}: Invalid JSON response from server`);
-          }
+          });
           
-          if (!uploadResult.success) {
-            console.warn(`⚠️ [CLIENT] Batch ${batchIndex + 1} failed:`, uploadResult.error);
-            // Continue with next batch even if this one fails
-          }
+          // Create mock response to match expected format
+          const successCount = uploadResults.filter(r => r.success).length;
+          const uploadResult = {
+            success: true,
+            results: uploadResults,
+            successCount,
+            failedCount: uploadResults.length - successCount
+          };
           
           // Add results from this batch
           allResults.push(...uploadResult.results);
