@@ -5,7 +5,6 @@ import fs from 'fs/promises';
 import path from 'path';
 import { put, del } from '@vercel/blob';
 import sharp from 'sharp';
-import logger from '@/lib/config/logger';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -121,7 +120,7 @@ async function processSingleFile(file: formidable.File): Promise<UploadResult> {
           optimized: true
         };
       } catch (blobError) {
-        logger.warn('Vercel Blob upload failed, falling back to local storage', {
+        console.warn('Vercel Blob upload failed, falling back to local storage:', {
           error: blobError instanceof Error ? blobError.message : 'Unknown blob error',
           fileName: safeFileName
         });
@@ -168,7 +167,7 @@ async function processSingleFile(file: formidable.File): Promise<UploadResult> {
     };
     
   } catch (error) {
-    logger.error('Single file upload error', { 
+    console.error('Single file upload error:', { 
       filename: file.originalFilename,
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -189,7 +188,7 @@ export default async function handler(
 ) {
   const startTime = Date.now();
   
-  logger.info('Multiple upload API called', {
+  console.log('Multiple upload API called:', {
     method: req.method,
     url: req.url,
     contentType: req.headers['content-type'],
@@ -218,7 +217,7 @@ export default async function handler(
   }
   
   if (req.method !== 'POST') {
-    logger.warn('Invalid HTTP method', { 
+    console.warn('Invalid HTTP method:', { 
       method: req.method, 
       url: req.url,
       headers: req.headers
@@ -237,7 +236,7 @@ export default async function handler(
   // Validate Content-Type for POST requests
   const contentType = req.headers['content-type'];
   if (!contentType || !contentType.includes('multipart/form-data')) {
-    logger.warn('Invalid content type', { 
+    console.warn('Invalid content type:', { 
       contentType, 
       method: req.method,
       url: req.url
@@ -339,7 +338,7 @@ export default async function handler(
     const successCount = results.filter(r => r.success).length;
     const errorCount = results.filter(r => !r.success).length;
 
-    logger.info('Multiple file upload completed', {
+    console.log('Multiple file upload completed:', {
       totalFiles: fileArray.length,
       successCount,
       errorCount
@@ -361,7 +360,7 @@ export default async function handler(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     
-    logger.error('Multiple upload API error', { 
+    console.error('Multiple upload API error:', { 
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
       method: req.method,

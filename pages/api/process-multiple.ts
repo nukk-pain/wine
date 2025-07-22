@@ -2,7 +2,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { geminiService } from '@/lib/gemini';
 import { processWineImage } from '@/lib/vision';
-import logger from '@/lib/config/logger';
 
 interface ImageProcessRequest {
   id: string;
@@ -136,7 +135,7 @@ async function processSingleImage(
       imageType = visionResult.imageType as 'wine_label' | 'receipt';
     }
 
-    logger.info('Image processing completed', { 
+    console.log('Image processing completed:', { 
       id: imageRequest.id,
       type: imageType,
       hasData: !!extractedData 
@@ -153,7 +152,7 @@ async function processSingleImage(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
-    logger.error('Image processing error', { 
+    console.error('Image processing error:', { 
       id: imageRequest.id,
       url: imageRequest.url,
       error: errorMessage
@@ -317,7 +316,7 @@ export default async function handler(
     const successCount = allResults.filter(r => r.success).length;
     const errorCount = allResults.filter(r => !r.success).length;
 
-    logger.info('Multiple image processing completed', {
+    console.log('Multiple image processing completed:', {
       totalImages: requestBody.images.length,
       successCount,
       errorCount,
@@ -340,7 +339,7 @@ export default async function handler(
     });
 
   } catch (error) {
-    logger.error('Multiple process API error', { 
+    console.error('Multiple process API error:', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
     });

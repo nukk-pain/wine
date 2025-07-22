@@ -2,7 +2,6 @@
 import NodeCache from 'node-cache';
 import crypto from 'crypto';
 import fs from 'fs';
-import { visionLogger } from './config/logger';
 
 import { getConfig } from './config';
 
@@ -54,7 +53,7 @@ async function generateImageHash(imageUrl: string): Promise<string> {
       return crypto.createHash('sha256').update(combinedData).digest('hex');
     }
   } catch (error: any) {
-    visionLogger.error('Failed to generate image hash', {
+    console.error('Failed to generate image hash:', {
       imageUrl,
       error: error.message
     });
@@ -71,16 +70,20 @@ export function getCachedResult(cacheKey: string): string | undefined {
     const result = cache.get<string>(cacheKey);
     if (result !== undefined) {
       cacheStats.hits++;
-      visionLogger.debug('Cache hit', { cacheKey, cacheStats });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Cache hit:', { cacheKey, cacheStats });
+      }
       return result;
     } else {
       cacheStats.misses++;
-      visionLogger.debug('Cache miss', { cacheKey, cacheStats });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Cache miss:', { cacheKey, cacheStats });
+      }
       return undefined;
     }
   } catch (error: any) {
     cacheStats.errors++;
-    visionLogger.error('Cache get error', {
+    console.error('Cache get error:', {
       cacheKey,
       error: error.message,
       cacheStats
@@ -96,19 +99,21 @@ export function setCachedResult(cacheKey: string, result: string, ttl?: number):
   try {
     const success = cache.set(cacheKey, result, ttl || cacheConf.stdTTL);
     if (success) {
-      visionLogger.debug('Cache set successful', { 
-        cacheKey, 
-        resultLength: result.length,
-        ttl: ttl || cache.options.stdTTL,
-        cacheStats
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Cache set successful:', { 
+          cacheKey, 
+          resultLength: result.length,
+          ttl: ttl || cache.options.stdTTL,
+          cacheStats
+        });
+      }
     } else {
-      visionLogger.warn('Cache set failed', { cacheKey, cacheStats });
+      console.warn('Cache set failed:', { cacheKey, cacheStats });
     }
     return success;
   } catch (error: any) {
     cacheStats.errors++;
-    visionLogger.error('Cache set error', {
+    console.error('Cache set error:', {
       cacheKey,
       error: error.message,
       cacheStats
@@ -154,7 +159,7 @@ export function clearCache(): void {
     evictions: 0, 
     memoryWarnings: 0 
   };
-  visionLogger.info('Cache cleared', { cacheStats });
+  console.log('Cache cleared:', { cacheStats });
 }
 
 /**
@@ -162,7 +167,9 @@ export function clearCache(): void {
  */
 export function deleteCachedResult(cacheKey: string): number {
   const deleted = cache.del(cacheKey);
-  visionLogger.debug('Cache key deleted', { cacheKey, deleted });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Cache key deleted:', { cacheKey, deleted });
+  }
   return deleted;
 }
 
@@ -171,7 +178,9 @@ export function deleteCachedResult(cacheKey: string): number {
  */
 export function updateCacheTTL(cacheKey: string, ttl: number): boolean {
   const success = cache.ttl(cacheKey, ttl);
-  visionLogger.debug('Cache TTL updated', { cacheKey, ttl, success });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Cache TTL updated:', { cacheKey, ttl, success });
+  }
   return success;
 }
 
@@ -179,19 +188,25 @@ export function updateCacheTTL(cacheKey: string, ttl: number): boolean {
  * 캐시 이벤트 리스너 설정
  */
 cache.on('set', (key, value) => {
-  visionLogger.debug('Cache item set', { key, valueLength: typeof value === 'string' ? value.length : 0 });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Cache item set:', { key, valueLength: typeof value === 'string' ? value.length : 0 });
+  }
 });
 
 cache.on('del', (key, value) => {
-  visionLogger.debug('Cache item deleted', { key });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Cache item deleted:', { key });
+  }
 });
 
 cache.on('expired', (key, value) => {
-  visionLogger.debug('Cache item expired', { key });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Cache item expired:', { key });
+  }
 });
 
 cache.on('flush', () => {
-  visionLogger.info('Cache flushed');
+  console.log('Cache flushed');
 });
 
 /**
@@ -202,7 +217,7 @@ function checkMemoryUsage(): void {
   const heapUsed = memUsage.heapUsed;
   
   if (heapUsed > MEMORY_LIMITS.cleanupThreshold) {
-    visionLogger.warn('Memory usage high, performing cache cleanup', {
+    console.warn('Memory usage high, performing cache cleanup:', {
       heapUsed: Math.round(heapUsed / 1024 / 1024),
       threshold: Math.round(MEMORY_LIMITS.cleanupThreshold / 1024 / 1024),
       action: 'cache_cleanup'
@@ -217,14 +232,14 @@ function checkMemoryUsage(): void {
       cacheStats.evictions++;
     }
     
-    visionLogger.info('Cache cleanup completed', {
+    console.log('Cache cleanup completed:', {
       removedKeys: keysToRemove,
       remainingKeys: cache.keys().length,
       newHeapUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
     });
   } else if (heapUsed > MEMORY_LIMITS.warningThreshold) {
     cacheStats.memoryWarnings++;
-    visionLogger.warn('Memory usage approaching limit', {
+    console.warn('Memory usage approaching limit:', {
       heapUsed: Math.round(heapUsed / 1024 / 1024),
       warningThreshold: Math.round(MEMORY_LIMITS.warningThreshold / 1024 / 1024),
       cacheKeys: cache.keys().length
@@ -261,7 +276,7 @@ export function forceCleanup(percentage: number = 50): number {
     cacheStats.evictions++;
   }
   
-  visionLogger.info('Forced cache cleanup', {
+  console.log('Forced cache cleanup:', {
     removedKeys: keysToRemove,
     remainingKeys: cache.keys().length,
     percentage
@@ -278,7 +293,7 @@ if (process.env.NODE_ENV !== 'test') {
     
     if (stats.hits + stats.misses > 0) {
       const hitRate = ((stats.hits / (stats.hits + stats.misses)) * 100).toFixed(2);
-      visionLogger.info('Cache statistics', {
+      console.log('Cache statistics:', {
         ...stats,
         hitRate: `${hitRate}%`,
         memoryUsageMB: memStats.heapUsedMB,

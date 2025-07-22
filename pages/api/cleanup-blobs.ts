@@ -1,7 +1,6 @@
 // pages/api/cleanup-blobs.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { del } from '@vercel/blob';
-import logger from '@/lib/config/logger';
 
 interface CleanupRequest {
   urls: string[];
@@ -19,7 +18,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<CleanupResponse>
 ) {
-  logger.info('Blob cleanup API called', {
+  console.log('Blob cleanup API called:', {
     method: req.method,
     vercelEnv: process.env.VERCEL_ENV || 'none'
   });
@@ -35,7 +34,7 @@ export default async function handler(
 
   // Only allow cleanup in Vercel environment with blob token
   if (!process.env.VERCEL || !process.env.BLOB_READ_WRITE_TOKEN) {
-    logger.warn('Blob cleanup skipped: not in Vercel environment or no blob token');
+    console.warn('Blob cleanup skipped: not in Vercel environment or no blob token');
     return res.status(200).json({
       success: true,
       deletedCount: 0,
@@ -56,17 +55,17 @@ export default async function handler(
       });
     }
 
-    logger.info(`Starting cleanup for ${urls.length} blob URLs`);
+    console.log(`Starting cleanup for ${urls.length} blob URLs`);
 
     const results = await Promise.allSettled(
       urls.map(async (url) => {
         try {
           await del(url);
-          logger.info(`Successfully deleted blob: ${url}`);
+          console.log(`Successfully deleted blob: ${url}`);
           return { success: true, url };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          logger.warn(`Failed to delete blob: ${url}`, { error: errorMessage });
+          console.warn(`Failed to delete blob: ${url}`, { error: errorMessage });
           return { success: false, url, error: errorMessage };
         }
       })
@@ -95,7 +94,7 @@ export default async function handler(
       )
     ].filter(Boolean);
 
-    logger.info('Blob cleanup completed', {
+    console.log('Blob cleanup completed:', {
       deletedCount,
       failedCount,
       totalUrls: urls.length
@@ -110,7 +109,7 @@ export default async function handler(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Blob cleanup API error', { error: errorMessage });
+    console.error('Blob cleanup API error:', { error: errorMessage });
     
     return res.status(500).json({
       success: false,

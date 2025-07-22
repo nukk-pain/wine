@@ -2,7 +2,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { saveWineToNotion, saveReceiptToNotion } from '@/lib/notion';
 import { normalizeWineData } from '@/lib/data-normalizer';
-import logger from '@/lib/config/logger';
 
 interface WineData {
   wine_name?: string;
@@ -75,7 +74,7 @@ async function saveSingleItem(item: BatchNotionItem): Promise<BatchSaveResult> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
-    logger.error('Single item save error', { 
+    console.error('Single item save error:', { 
       id: item.id,
       type: item.type,
       error: errorMessage
@@ -260,7 +259,7 @@ export default async function handler(
           .filter(url => url && url.includes('vercel-storage.com')); // Only Vercel Blob URLs
         
         if (blobUrls.length > 0) {
-          logger.info(`Starting blob cleanup for ${blobUrls.length} successfully saved items`);
+          console.log(`Starting blob cleanup for ${blobUrls.length} successfully saved items`);
           
           // Call cleanup API
           const cleanupResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/cleanup-blobs`, {
@@ -273,26 +272,26 @@ export default async function handler(
           
           if (cleanupResponse.ok) {
             const cleanupResult = await cleanupResponse.json();
-            logger.info('Blob cleanup completed', {
+            console.log('Blob cleanup completed:', {
               deletedCount: cleanupResult.deletedCount,
               failedCount: cleanupResult.failedCount
             });
           } else {
-            logger.warn('Blob cleanup API call failed', {
+            console.warn('Blob cleanup API call failed:', {
               status: cleanupResponse.status,
               statusText: cleanupResponse.statusText
             });
           }
         }
       } catch (cleanupError) {
-        logger.warn('Blob cleanup failed', {
+        console.warn('Blob cleanup failed:', {
           error: cleanupError instanceof Error ? cleanupError.message : 'Unknown cleanup error'
         });
         // Don't fail the main operation if cleanup fails
       }
     }
 
-    logger.info('Batch Notion save completed', {
+    console.log('Batch Notion save completed:', {
       operation: requestBody.operation,
       totalItems: itemsToSave.length,
       savedCount,
@@ -314,7 +313,7 @@ export default async function handler(
     });
 
   } catch (error) {
-    logger.error('Batch Notion save API error', { 
+    console.error('Batch Notion save API error:', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
     });
