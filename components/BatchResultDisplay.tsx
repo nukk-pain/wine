@@ -1,12 +1,33 @@
 import React, { useState } from 'react';
 import { ImageProcessingItem } from './ImagePreviewGrid';
+import { NotionWineProperties } from '@/lib/notion-schema';
 
 interface BatchResultDisplayProps {
   items: ImageProcessingItem[];
   onSaveAll: (completedItems: ImageProcessingItem[]) => void;
   onSaveSelected: (selectedItems: ImageProcessingItem[]) => void;
+  onSaveIndividual?: (itemId: string, wineData: NotionWineProperties) => Promise<boolean>;
+  onAddManual?: (wineData: NotionWineProperties) => Promise<boolean>;
+  onDuplicate?: (itemId: string, wineData: NotionWineProperties) => void;
+  onDelete?: (itemId: string) => void;
   loading?: boolean;
   className?: string;
+}
+
+interface EditingState {
+  [itemId: string]: {
+    isEditing: boolean;
+    editedData: NotionWineProperties;
+    originalData: NotionWineProperties;
+    isSaving: boolean;
+  };
+}
+
+interface ManualWineEntry {
+  id: string;
+  isEditing: boolean;
+  editedData: NotionWineProperties;
+  isSaving: boolean;
 }
 
 interface BatchSaveResult {
@@ -19,10 +40,16 @@ export function BatchResultDisplay({
   items, 
   onSaveAll, 
   onSaveSelected, 
+  onSaveIndividual,
+  onAddManual,
+  onDuplicate,
+  onDelete,
   loading = false,
   className = '' 
 }: BatchResultDisplayProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [editingState, setEditingState] = useState<EditingState>({});
+  const [manualWines, setManualWines] = useState<ManualWineEntry[]>([]);
 
   if (items.length === 0) {
     return null;
@@ -58,13 +85,231 @@ export function BatchResultDisplay({
     return completedItems.filter(item => selectedItems.has(item.id));
   };
 
-  // Render wine information
+  // Convert extracted data to Notion format
+  const convertToNotionFormat = (extractedData: any): NotionWineProperties => {
+    return {
+      'Name': extractedData.wine_name || '',
+      'Vintage': extractedData.vintage ? parseInt(extractedData.vintage) : null,
+      'Region/Producer': [extractedData.region, extractedData.producer].filter(Boolean).join(', '),
+      'Price': extractedData.price ? parseFloat(extractedData.price) : null,
+      'Quantity': 1,
+      'Store': '',
+      'Varietal(품종)': extractedData.varietal ? [extractedData.varietal] : [],
+      'Image': null
+    };
+  };
+
+  // Start editing an item
+  const startEditing = (itemId: string, extractedData: any) => {
+    const notionData = convertToNotionFormat(extractedData);
+    setEditingState(prev => ({
+      ...prev,
+      [itemId]: {
+        isEditing: true,
+        editedData: notionData,
+        originalData: notionData,
+        isSaving: false
+      }
+    }));
+  };
+
+  // Cancel editing
+  const cancelEditing = (itemId: string) => {
+    setEditingState(prev => {
+      const newState = { ...prev };
+      delete newState[itemId];
+      return newState;
+    });
+  };
+
+  // Update edited data
+  const updateEditedData = (itemId: string, updates: Partial<NotionWineProperties>) => {
+    setEditingState(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        editedData: { ...prev[itemId].editedData, ...updates }
+      }
+    }));
+  };
+
+  // Save individual item
+  const saveIndividualItem = async (itemId: string) => {
+    if (!onSaveIndividual) return;
+    
+    const editState = editingState[itemId];
+    if (!editState) return;
+
+    setEditingState(prev => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], isSaving: true }
+    }));
+
+    try {
+      const success = await onSaveIndividual(itemId, editState.editedData);
+      if (success) {
+        // Clear editing state on success
+        setEditingState(prev => {
+          const newState = { ...prev };
+          delete newState[itemId];
+          return newState;
+        });
+      } else {
+        // Reset saving state on failure
+        setEditingState(prev => ({
+          ...prev,
+          [itemId]: { ...prev[itemId], isSaving: false }
+        }));
+      }
+    } catch (error) {
+      setEditingState(prev => ({
+        ...prev,
+        [itemId]: { ...prev[itemId], isSaving: false }
+      }));
+    }
+  };
+
+  // Add manual wine entry
+  const addManualWine = () => {
+    const newManualWine: ManualWineEntry = {
+      id: `manual-${Date.now()}`,
+      isEditing: true,
+      editedData: {
+        'Name': '',
+        'Vintage': null,
+        'Region/Producer': '',
+        'Price': null,
+        'Quantity': 1,
+        'Store': '',
+        'Varietal(품종)': [],
+        'Image': null
+      },
+      isSaving: false
+    };
+    
+    setManualWines(prev => [...prev, newManualWine]);
+  };
+
+  // Update manual wine data
+  const updateManualWineData = (id: string, updates: Partial<NotionWineProperties>) => {
+    setManualWines(prev => 
+      prev.map(wine => 
+        wine.id === id 
+          ? { ...wine, editedData: { ...wine.editedData, ...updates } }
+          : wine
+      )
+    );
+  };
+
+  // Save manual wine
+  const saveManualWine = async (id: string) => {
+    if (!onAddManual) return;
+    
+    const manualWine = manualWines.find(wine => wine.id === id);
+    if (!manualWine) return;
+
+    setManualWines(prev => 
+      prev.map(wine => 
+        wine.id === id 
+          ? { ...wine, isSaving: true }
+          : wine
+      )
+    );
+
+    try {
+      const success = await onAddManual(manualWine.editedData);
+      if (success) {
+        // Remove from manual wines list on success
+        setManualWines(prev => prev.filter(wine => wine.id !== id));
+      } else {
+        // Reset saving state on failure
+        setManualWines(prev => 
+          prev.map(wine => 
+            wine.id === id 
+              ? { ...wine, isSaving: false }
+              : wine
+          )
+        );
+      }
+    } catch (error) {
+      setManualWines(prev => 
+        prev.map(wine => 
+          wine.id === id 
+            ? { ...wine, isSaving: false }
+            : wine
+        )
+      );
+    }
+  };
+
+  // Cancel manual wine entry
+  const cancelManualWine = (id: string) => {
+    setManualWines(prev => prev.filter(wine => wine.id !== id));
+  };
+
+  // Validate wine data
+  const validateWineData = (data: NotionWineProperties) => {
+    const errors: { [key: string]: string } = {};
+    const warnings: { [key: string]: string } = {};
+    
+    // Required field validation
+    if (!data.Name || data.Name.trim() === '') {
+      errors.Name = '와인 이름은 필수입니다';
+    } else if (data.Name.length > 100) {
+      warnings.Name = '와인 이름이 너무 깁니다 (100자 이하 권장)';
+    }
+    
+    // Vintage validation
+    if (data.Vintage !== null) {
+      const currentYear = new Date().getFullYear();
+      if (data.Vintage < 1800 || data.Vintage > currentYear + 5) {
+        warnings.Vintage = `빈티지가 비현실적입니다 (1800-${currentYear + 5})`;
+      }
+    }
+    
+    // Price validation
+    if (data.Price !== null && data.Price < 0) {
+      errors.Price = '가격은 0 이상이어야 합니다';
+    } else if (data.Price !== null && data.Price > 100000) {
+      warnings.Price = '가격이 매우 높습니다. 단위를 확인해주세요';
+    }
+    
+    // Quantity validation
+    if (data.Quantity !== null && (data.Quantity < 1 || data.Quantity > 1000)) {
+      errors.Quantity = '수량은 1-1000 범위에 있어야 합니다';
+    }
+    
+    return {
+      errors,
+      warnings,
+      isValid: Object.keys(errors).length === 0
+    };
+  };
+
+  // Get validation for a specific item
+  const getValidationForItem = (itemId: string, isManual: boolean = false) => {
+    if (isManual) {
+      const manualWine = manualWines.find(wine => wine.id === itemId);
+      return manualWine ? validateWineData(manualWine.editedData) : { errors: {}, warnings: {}, isValid: false };
+    } else {
+      const editState = editingState[itemId];
+      return editState ? validateWineData(editState.editedData) : { errors: {}, warnings: {}, isValid: false };
+    }
+  };
+
+  // Render wine information in read-only mode
   const renderWineInfo = (item: ImageProcessingItem) => {
     if (!item.result || !item.result.extractedData) return null;
 
     const data = item.result.extractedData;
+    const editState = editingState[item.id];
+    
+    if (editState && editState.isEditing) {
+      return renderEditingForm(item.id, editState);
+    }
+
     return (
-      <div className="mt-3 text-sm space-y-1">
+      <div className="mt-3 text-sm space-y-3">
         {data.wine_name && (
           <div className="font-medium text-gray-800">
             🍷 {data.wine_name}
@@ -97,6 +342,355 @@ export function BatchResultDisplay({
             </span>
           )}
         </div>
+        
+        {/* Action Buttons */}
+        <div className="space-y-2 pt-2">
+          {/* Primary Actions */}
+          <div className="flex space-x-2">
+            <button
+              onClick={() => startEditing(item.id, data)}
+              className="flex-1 bg-blue-500 text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors"
+            >
+              ✏️ 편집
+            </button>
+            {onSaveIndividual && (
+              <button
+                onClick={() => {
+                  const notionData = convertToNotionFormat(data);
+                  onSaveIndividual(item.id, notionData);
+                }}
+                className="flex-1 bg-green-500 text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-green-600 transition-colors"
+              >
+                💾 저장
+              </button>
+            )}
+          </div>
+          
+          {/* Quick Actions */}
+          {(onDuplicate || onDelete) && (
+            <div className="flex space-x-2">
+              {onDuplicate && (
+                <button
+                  onClick={() => {
+                    const notionData = convertToNotionFormat(data);
+                    onDuplicate(item.id, notionData);
+                  }}
+                  className="flex-1 bg-gray-500 text-white py-1 px-2 rounded text-xs font-medium hover:bg-gray-600 transition-colors"
+                  title="이 와인 복사"
+                >
+                  📋 복사
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('이 와인 결과를 삭제하시결습니까?')) {
+                      onDelete(item.id);
+                    }
+                  }}
+                  className="flex-1 bg-red-500 text-white py-1 px-2 rounded text-xs font-medium hover:bg-red-600 transition-colors"
+                  title="이 와인 결과 삭제"
+                >
+                  🗑️ 삭제
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Render editing form
+  const renderEditingForm = (itemId: string, editState: EditingState[string]) => {
+    const { editedData, isSaving } = editState;
+    
+    return (
+      <div className="mt-3 space-y-3">
+        {/* Wine Name */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            와인 이름 *
+          </label>
+          <input
+            type="text"
+            value={editedData.Name}
+            onChange={(e) => updateEditedData(itemId, { Name: e.target.value })}
+            className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
+              getValidationForItem(itemId).errors.Name 
+                ? 'border-red-300 focus:ring-red-500' 
+                : getValidationForItem(itemId).warnings.Name
+                ? 'border-yellow-300 focus:ring-yellow-500'
+                : 'border-gray-300 focus:ring-blue-500'
+            }`}
+            placeholder="와인 이름을 입력하세요"
+            disabled={isSaving}
+          />
+          {getValidationForItem(itemId).errors.Name && (
+            <div className="text-xs text-red-600 mt-1">
+              ⚠️ {getValidationForItem(itemId).errors.Name}
+            </div>
+          )}
+          {getValidationForItem(itemId).warnings.Name && (
+            <div className="text-xs text-yellow-600 mt-1">
+              ⚠️ {getValidationForItem(itemId).warnings.Name}
+            </div>
+          )}
+        </div>
+
+        {/* Vintage and Price */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              빈티지
+            </label>
+            <input
+              type="number"
+              value={editedData.Vintage || ''}
+              onChange={(e) => updateEditedData(itemId, { Vintage: e.target.value ? parseInt(e.target.value) : null })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="2020"
+              disabled={isSaving}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              가격
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={editedData.Price || ''}
+              onChange={(e) => updateEditedData(itemId, { Price: e.target.value ? parseFloat(e.target.value) : null })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0.00"
+              disabled={isSaving}
+            />
+          </div>
+        </div>
+
+        {/* Region/Producer */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            지역/생산자
+          </label>
+          <input
+            type="text"
+            value={editedData['Region/Producer']}
+            onChange={(e) => updateEditedData(itemId, { 'Region/Producer': e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="예: 나파 밸리, 보르도"
+            disabled={isSaving}
+          />
+        </div>
+
+        {/* Varietal and Store */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              품종
+            </label>
+            <input
+              type="text"
+              value={editedData['Varietal(품종)'].join(', ')}
+              onChange={(e) => {
+                const varietals = e.target.value.split(',').map(v => v.trim()).filter(v => v);
+                updateEditedData(itemId, { 'Varietal(품종)': varietals });
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="카베르네 소비뇽"
+              disabled={isSaving}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              구매처
+            </label>
+            <input
+              type="text"
+              value={editedData.Store}
+              onChange={(e) => updateEditedData(itemId, { Store: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="와인샵"
+              disabled={isSaving}
+            />
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex space-x-2 pt-2">
+          <button
+            onClick={() => saveIndividualItem(itemId)}
+            disabled={isSaving || !getValidationForItem(itemId).isValid}
+            className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+              getValidationForItem(itemId).isValid
+                ? 'bg-green-500 text-white hover:bg-green-600'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={!getValidationForItem(itemId).isValid ? '필수 정보를 모두 입력하고 오류를 수정해주세요' : ''}
+          >
+            {isSaving ? '💾 저장 중...' : getValidationForItem(itemId).isValid ? '💾 저장' : '⚠️ 오류 수정 필요'}
+          </button>
+          <button
+            onClick={() => cancelEditing(itemId)}
+            disabled={isSaving}
+            className="flex-1 bg-gray-400 text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-gray-500 disabled:opacity-50 transition-colors"
+          >
+            취소
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Render manual wine form
+  const renderManualWineForm = (manualWine: ManualWineEntry) => {
+    const { id, editedData, isSaving } = manualWine;
+    
+    return (
+      <div className="bg-white rounded-xl shadow-lg border-2 border-dashed border-blue-300 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-medium text-blue-800 flex items-center space-x-2">
+            <span>➕</span>
+            <span>수동으로 와인 추가</span>
+          </h4>
+        </div>
+        
+        <div className="space-y-3">
+          {/* Wine Name */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              와인 이름 *
+            </label>
+            <input
+              type="text"
+              value={editedData.Name}
+              onChange={(e) => updateManualWineData(id, { Name: e.target.value })}
+              className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
+                getValidationForItem(id, true).errors.Name 
+                  ? 'border-red-300 focus:ring-red-500' 
+                  : getValidationForItem(id, true).warnings.Name
+                  ? 'border-yellow-300 focus:ring-yellow-500'
+                  : 'border-gray-300 focus:ring-blue-500'
+              }`}
+              placeholder="와인 이름을 입력하세요"
+              disabled={isSaving}
+              autoFocus
+            />
+            {getValidationForItem(id, true).errors.Name && (
+              <div className="text-xs text-red-600 mt-1">
+                ⚠️ {getValidationForItem(id, true).errors.Name}
+              </div>
+            )}
+            {getValidationForItem(id, true).warnings.Name && (
+              <div className="text-xs text-yellow-600 mt-1">
+                ⚠️ {getValidationForItem(id, true).warnings.Name}
+              </div>
+            )}
+          </div>
+
+          {/* Vintage and Price */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                빈티지
+              </label>
+              <input
+                type="number"
+                value={editedData.Vintage || ''}
+                onChange={(e) => updateManualWineData(id, { Vintage: e.target.value ? parseInt(e.target.value) : null })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="2020"
+                disabled={isSaving}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                가격
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={editedData.Price || ''}
+                onChange={(e) => updateManualWineData(id, { Price: e.target.value ? parseFloat(e.target.value) : null })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+                disabled={isSaving}
+              />
+            </div>
+          </div>
+
+          {/* Region/Producer */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              지역/생산자
+            </label>
+            <input
+              type="text"
+              value={editedData['Region/Producer']}
+              onChange={(e) => updateManualWineData(id, { 'Region/Producer': e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="예: 나파 밸리, 보르도"
+              disabled={isSaving}
+            />
+          </div>
+
+          {/* Varietal and Store */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                품종
+              </label>
+              <input
+                type="text"
+                value={editedData['Varietal(품종)'].join(', ')}
+                onChange={(e) => {
+                  const varietals = e.target.value.split(',').map(v => v.trim()).filter(v => v);
+                  updateManualWineData(id, { 'Varietal(품종)': varietals });
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="카베르네 소비뇽"
+                disabled={isSaving}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                구매처
+              </label>
+              <input
+                type="text"
+                value={editedData.Store}
+                onChange={(e) => updateManualWineData(id, { Store: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="와인샵"
+                disabled={isSaving}
+              />
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex space-x-2 pt-2">
+            <button
+              onClick={() => saveManualWine(id)}
+              disabled={isSaving || !getValidationForItem(id, true).isValid}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                getValidationForItem(id, true).isValid
+                  ? 'bg-green-500 text-white hover:bg-green-600'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={!getValidationForItem(id, true).isValid ? '필수 정보를 모두 입력하고 오류를 수정해주세요' : ''}
+            >
+              {isSaving ? '💾 저장 중...' : getValidationForItem(id, true).isValid ? '💾 저장' : '⚠️ 오류 수정 필요'}
+            </button>
+            <button
+              onClick={() => cancelManualWine(id)}
+              disabled={isSaving}
+              className="flex-1 bg-gray-400 text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-gray-500 disabled:opacity-50 transition-colors"
+            >
+              취소
+            </button>
+          </div>
+        </div>
       </div>
     );
   };
@@ -106,7 +700,7 @@ export function BatchResultDisplay({
       {/* Summary Statistics */}
       <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
         <h3 className="text-lg font-bold text-blue-800 mb-3">📊 분석 결과 요약</h3>
-        <div className="grid grid-cols-2 gap-4 text-center">
+        <div className="grid grid-cols-2 gap-4 text-center mb-4">
           <div className="bg-white rounded-lg p-3">
             <div className="text-2xl mb-1">✅</div>
             <div className="text-sm font-medium text-green-700">성공</div>
@@ -122,7 +716,64 @@ export function BatchResultDisplay({
             </div>
           </div>
         </div>
+        
+        {/* Validation Summary */}
+        {(completedItems.length > 0 || manualWines.length > 0) && (
+          <div className="bg-white rounded-lg p-3 border-t border-blue-200">
+            <div className="text-sm font-medium text-blue-800 mb-2">📄 유효성 검사</div>
+            <div className="flex space-x-4 text-xs">
+              <div className="text-green-600">
+                ✅ 유효: {completedItems.filter(item => {
+                  const editState = editingState[item.id];
+                  return editState ? validateWineData(editState.editedData).isValid : true;
+                }).length + manualWines.filter(wine => validateWineData(wine.editedData).isValid).length}
+              </div>
+              <div className="text-yellow-600">
+                ⚠️ 경고: {completedItems.filter(item => {
+                  const editState = editingState[item.id];
+                  return editState ? Object.keys(validateWineData(editState.editedData).warnings).length > 0 : false;
+                }).length + manualWines.filter(wine => Object.keys(validateWineData(wine.editedData).warnings).length > 0).length}
+              </div>
+              <div className="text-red-600">
+                ❌ 오류: {completedItems.filter(item => {
+                  const editState = editingState[item.id];
+                  return editState ? !validateWineData(editState.editedData).isValid : false;
+                }).length + manualWines.filter(wine => !validateWineData(wine.editedData).isValid).length}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Add Manual Wine Button */}
+      {onAddManual && (
+        <div className="mb-6">
+          <button
+            onClick={addManualWine}
+            className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-bold rounded-xl shadow-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-200 transform active:scale-95"
+          >
+            ➕ 수동으로 와인 추가
+          </button>
+        </div>
+      )}
+
+      {/* Manual Wine Entries */}
+      {manualWines.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-bold text-purple-800 mb-4 flex items-center space-x-2">
+            <span>➕</span>
+            <span>수동 추가 와인 ({manualWines.length}개)</span>
+          </h3>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {manualWines.map((manualWine) => (
+              <div key={manualWine.id}>
+                {renderManualWineForm(manualWine)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Batch Save Controls */}
       {completedItems.length > 0 && (

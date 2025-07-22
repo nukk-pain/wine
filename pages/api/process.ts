@@ -16,7 +16,7 @@ const WINE_PHOTOS_DIR = process.env.NODE_ENV === 'production'
 
 export const config = {
   api: {
-    bodyParser: false, // Disable bodyParser for formidable to handle multipart
+    bodyParser: false, // Disable bodyParser to handle both JSON and multipart manually
   },
 };
 
@@ -52,8 +52,42 @@ export default async function handler(
     }
     
     if (contentType.includes('application/json')) {
-      // JSON request with imageUrl (Vercel Blob)
-      const body = req.body;
+      // JSON request with imageUrl (Vercel Blob) - parse manually since bodyParser is disabled
+      let body;
+      try {
+        // Manually parse JSON since bodyParser is disabled
+        const rawBody = await new Promise<string>((resolve, reject) => {
+          let data = '';
+          req.on('data', chunk => {
+            data += chunk;
+          });
+          req.on('end', () => {
+            resolve(data);
+          });
+          req.on('error', reject);
+        });
+        
+        body = JSON.parse(rawBody);
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📋 [API] Parsed JSON body:', body);
+          console.log('   Body type:', typeof body);
+          console.log('   Has imageUrl?', body && 'imageUrl' in body);
+        }
+      } catch (parseError) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Invalid JSON in request body: ' + (parseError instanceof Error ? parseError.message : 'Unknown error')
+        });
+      }
+      
+      if (!body) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Request body is missing or empty' 
+        });
+      }
+      
       imageUrl = body.imageUrl;
       type = body.type;
       useGemini = body.useGemini;
@@ -66,11 +100,20 @@ export default async function handler(
         });
       }
       
-      // Validate URL format
-      if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+      // Handle relative URLs in development
+      if (process.env.NODE_ENV === 'development' && imageUrl.startsWith('/')) {
+        // Convert relative URL to full URL for local development
+        const protocol = req.headers['x-forwarded-proto'] || 'http';
+        const host = req.headers.host;
+        imageUrl = `${protocol}://${host}${imageUrl}`;
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 [API] Converted relative URL to full URL:', imageUrl);
+        }
+      } else if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
         return res.status(400).json({ 
           success: false, 
-          error: 'Invalid imageUrl format. Must be a valid HTTP(S) URL' 
+          error: 'Invalid imageUrl format. Must be a valid HTTP(S) URL or relative path' 
         });
       }
       

@@ -36,7 +36,6 @@ build/
 .next/
 
 # Plan files
-plan.md
 mock.md
 plan-ori.md
 GEMINI.MD

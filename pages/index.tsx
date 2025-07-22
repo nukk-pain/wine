@@ -8,6 +8,7 @@ import { DataConfirmation } from '@/components/DataConfirmation';
 import { ImagePreviewGrid, ImageProcessingItem } from '@/components/ImagePreviewGrid';
 import { ProcessingProgress } from '@/components/ProcessingProgress';
 import { BatchResultDisplay } from '@/components/BatchResultDisplay';
+import { NotionWineProperties } from '@/lib/notion-schema';
 
 // Mobile-first layout components
 const MobileLayout = ({ children }: { children: React.ReactNode }) => (
@@ -607,6 +608,112 @@ export default function MainPage() {
     }
   };
 
+  const handleSaveIndividual = async (itemId: string, wineData: NotionWineProperties): Promise<boolean> => {
+    try {
+      console.log('💾 [CLIENT] Starting individual save for item:', itemId);
+      console.log('   Wine data:', wineData);
+
+      const response = await fetch('/api/notion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'save_wine',
+          data: wineData,
+          source: 'wine_label'
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        console.log('✅ [CLIENT] Individual save successful for item:', itemId);
+        alert('✅ 와인이 성공적으로 Notion에 저장되었습니다!');
+        return true;
+      } else {
+        console.error('❌ [CLIENT] Individual save failed:', result.error);
+        alert(`❌ 저장 실패: ${result.error || '알 수 없는 오류'}`);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ [CLIENT] Individual save error:', error);
+      alert(`❌ 저장 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+      return false;
+    }
+  };
+
+  const handleAddManual = async (wineData: NotionWineProperties): Promise<boolean> => {
+    try {
+      console.log('➕ [CLIENT] Starting manual wine save');
+      console.log('   Wine data:', wineData);
+
+      const response = await fetch('/api/notion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'save_wine',
+          data: wineData,
+          source: 'manual_entry'
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        console.log('✅ [CLIENT] Manual wine save successful');
+        alert('✅ 수동 추가 와인이 성공적으로 Notion에 저장되었습니다!');
+        return true;
+      } else {
+        console.error('❌ [CLIENT] Manual wine save failed:', result.error);
+        alert(`❌ 저장 실패: ${result.error || '알 수 없는 오류'}`);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ [CLIENT] Manual wine save error:', error);
+      alert(`❌ 저장 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+      return false;
+    }
+  };
+
+  const handleDuplicate = (itemId: string, wineData: NotionWineProperties) => {
+    console.log('📋 [CLIENT] Duplicating wine:', itemId);
+    
+    // Create a new processing item with the same wine data but new ID
+    const originalItem = processingItems.find(item => item.id === itemId);
+    if (!originalItem) return;
+    
+    const duplicateId = `duplicate-${Date.now()}`;
+    const duplicateItem: ImageProcessingItem = {
+      ...originalItem,
+      id: duplicateId,
+      file: originalItem.file, // Keep reference to original file
+    };
+    
+    // Add to processing items
+    setProcessingItems(prev => [...prev, duplicateItem]);
+    
+    alert(`📋 와인 결과가 복사되었습니다! 이제 각각 편집하고 저장할 수 있습니다.`);
+  };
+
+  const handleDelete = (itemId: string) => {
+    console.log('🗑️ [CLIENT] Deleting wine result:', itemId);
+    
+    // Remove from processing items
+    setProcessingItems((prev: ImageProcessingItem[]) => {
+      const itemToRemove = prev.find(item => item.id === itemId);
+      if (itemToRemove && itemToRemove.url.startsWith('blob:')) {
+        // Clean up blob URL
+        URL.revokeObjectURL(itemToRemove.url);
+      }
+      return prev.filter(item => item.id !== itemId);
+    });
+    
+    alert('🗑️ 와인 결과가 삭제되었습니다.');
+  };
+
   return (
     <>
       <Head>
@@ -695,6 +802,10 @@ export default function MainPage() {
                       items={processingItems}
                       onSaveAll={handleSaveAll}
                       onSaveSelected={handleSaveSelected}
+                      onSaveIndividual={handleSaveIndividual}
+                      onAddManual={handleAddManual}
+                      onDuplicate={handleDuplicate}
+                      onDelete={handleDelete}
                       loading={saving}
                     />
                   </ProcessingStep>
