@@ -345,6 +345,85 @@ export default function MainPage() {
     }
   };
 
+  // Retry analysis for a single item
+  const handleRetryAnalysis = async (itemId: string) => {
+    const item = processingItems.find(item => item.id === itemId);
+    if (!item) return;
+    
+    console.log(`🔄 [CLIENT] Retrying analysis for image ${itemId}...`);
+    
+    // Update status to processing
+    setProcessingItems(prevItems => 
+      prevItems.map(i => 
+        i.id === itemId 
+          ? { ...i, status: 'processing', progress: 0, error: undefined, result: undefined }
+          : i
+      )
+    );
+    
+    try {
+      // Use process-multiple API for single item retry
+      const response = await fetch('/api/process-multiple', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          images: [{
+            id: item.id,
+            url: item.url,
+            type: 'wine_label' // Default to wine_label, let Gemini auto-classify
+          }],
+          useGemini: 'true',
+          skipNotion: 'true' // Skip Notion for now, save manually later
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.results && result.results.length > 0) {
+        const apiResult = result.results[0];
+        
+        console.log(`✅ [CLIENT] Retry analysis completed for image ${itemId}`);
+        
+        // Update item with new results
+        setProcessingItems(prevItems => 
+          prevItems.map(i => 
+            i.id === itemId ? {
+              ...i,
+              status: apiResult.success ? 'completed' : 'error',
+              result: apiResult.success ? {
+                extractedData: apiResult.extractedData,
+                type: apiResult.type
+              } : undefined,
+              error: apiResult.success ? undefined : apiResult.error,
+              progress: apiResult.success ? 100 : 0
+            } : i
+          )
+        );
+        
+      } else {
+        throw new Error(result.error || 'Retry analysis failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ [CLIENT] Retry analysis failed:', error);
+      
+      // Update item with error status
+      setProcessingItems(prevItems => 
+        prevItems.map(i => 
+          i.id === itemId 
+            ? { ...i, status: 'error', error: error instanceof Error ? error.message : 'Retry analysis failed' }
+            : i
+        )
+      );
+    }
+  };
+
   const handleRemoveImage = (id: string) => {
     setProcessingItems(items => {
       const itemToRemove = items.find(item => item.id === id);
@@ -901,26 +980,6 @@ export default function MainPage() {
     }
   };
 
-  const handleDuplicate = (itemId: string, wineData: NotionWineProperties) => {
-    console.log('📋 [CLIENT] Duplicating wine:', itemId);
-    
-    // Create a new processing item with the same wine data but new ID
-    const originalItem = processingItems.find(item => item.id === itemId);
-    if (!originalItem) return;
-    
-    const duplicateId = `duplicate-${Date.now()}`;
-    const duplicateItem: ImageProcessingItem = {
-      ...originalItem,
-      id: duplicateId,
-      file: originalItem.file, // Keep reference to original file
-    };
-    
-    // Add to processing items
-    setProcessingItems(prev => [...prev, duplicateItem]);
-    
-    alert(`📋 와인 결과가 복사되었습니다! 이제 각각 편집하고 저장할 수 있습니다.`);
-  };
-
   const handleDelete = (itemId: string) => {
     console.log('🗑️ [CLIENT] Deleting wine result:', itemId);
     
@@ -1020,7 +1079,7 @@ export default function MainPage() {
                       onSaveSelected={handleSaveSelected}
                       onSaveIndividual={handleSaveIndividual}
                       onAddManual={handleAddManual}
-                      onDuplicate={handleDuplicate}
+                      onRetryAnalysis={handleRetryAnalysis}
                       onDelete={handleDelete}
                       loading={saving}
                     />
