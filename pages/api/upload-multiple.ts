@@ -84,80 +84,87 @@ async function processSingleFile(file: formidable.File): Promise<UploadResult> {
     const ext = path.extname(file.originalFilename || '.jpg');
     const safeFileName = `wine_${timestamp}_${randomSuffix}${ext}`;
 
-    // Determine if we're in Vercel environment
-    if (process.env.VERCEL) {
-      // Vercel Blob upload
-      const imageBuffer = await fs.readFile(file.filepath);
-      
-      // Optimize image with Sharp
-      const optimizedBuffer = await sharp(imageBuffer)
-        .resize(1920, 1920, { 
-          fit: 'inside', 
-          withoutEnlargement: true 
-        })
-        .jpeg({ 
-          quality: 85,
-          progressive: true 
-        })
-        .toBuffer();
+    // Determine if we're in Vercel environment and have blob token
+    if (process.env.VERCEL && process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        // Vercel Blob upload
+        const imageBuffer = await fs.readFile(file.filepath);
+        
+        // Optimize image with Sharp
+        const optimizedBuffer = await sharp(imageBuffer)
+          .resize(1920, 1920, { 
+            fit: 'inside', 
+            withoutEnlargement: true 
+          })
+          .jpeg({ 
+            quality: 85,
+            progressive: true 
+          })
+          .toBuffer();
 
-      const blob = await put(safeFileName, optimizedBuffer, {
-        access: 'public',
-        contentType: 'image/jpeg'
-      });
+        const blob = await put(safeFileName, optimizedBuffer, {
+          access: 'public',
+          contentType: 'image/jpeg'
+        });
 
-      // Clean up temp file
-      await fs.unlink(file.filepath).catch(() => {});
+        // Clean up temp file
+        await fs.unlink(file.filepath).catch(() => {});
 
-      return {
-        success: true,
-        fileName: safeFileName,
-        filePath: blob.url,
-        fileUrl: blob.url,
-        url: blob.url,
-        fileSize: optimizedBuffer.length,
-        optimized: true
-      };
-      
-    } else {
-      // Local storage
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-      await fs.mkdir(uploadDir, { recursive: true });
-      
-      const filePath = path.join(uploadDir, safeFileName);
-      
-      // Read and optimize image
-      const imageBuffer = await fs.readFile(file.filepath);
-      const optimizedBuffer = await sharp(imageBuffer)
-        .resize(1920, 1920, { 
-          fit: 'inside', 
-          withoutEnlargement: true 
-        })
-        .jpeg({ 
-          quality: 85,
-          progressive: true 
-        })
-        .toBuffer();
-      
-      // Save optimized image
-      await fs.writeFile(filePath, optimizedBuffer);
-      
-      // Clean up temp file
-      await fs.unlink(file.filepath).catch(() => {});
-      
-      // Get file stats
-      const stats = await fs.stat(filePath);
-      
-      return {
-        success: true,
-        fileName: safeFileName,
-        filePath,
-        fileUrl: `/uploads/${safeFileName}`,
-        url: `/uploads/${safeFileName}`,
-        fileSize: stats.size,
-        optimized: true
-      };
+        return {
+          success: true,
+          fileName: safeFileName,
+          filePath: blob.url,
+          fileUrl: blob.url,
+          url: blob.url,
+          fileSize: optimizedBuffer.length,
+          optimized: true
+        };
+      } catch (blobError) {
+        logger.warn('Vercel Blob upload failed, falling back to local storage', {
+          error: blobError instanceof Error ? blobError.message : 'Unknown blob error',
+          fileName: safeFileName
+        });
+        // Fall through to local storage
+      }
     }
+    
+    // Local storage (fallback or default)
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    await fs.mkdir(uploadDir, { recursive: true });
+    
+    const filePath = path.join(uploadDir, safeFileName);
+    
+    // Read and optimize image
+    const imageBuffer = await fs.readFile(file.filepath);
+    const optimizedBuffer = await sharp(imageBuffer)
+      .resize(1920, 1920, { 
+        fit: 'inside', 
+        withoutEnlargement: true 
+      })
+      .jpeg({ 
+        quality: 85,
+        progressive: true 
+      })
+      .toBuffer();
+    
+    // Save optimized image
+    await fs.writeFile(filePath, optimizedBuffer);
+    
+    // Clean up temp file
+    await fs.unlink(file.filepath).catch(() => {});
+    
+    // Get file stats
+    const stats = await fs.stat(filePath);
+    
+    return {
+      success: true,
+      fileName: safeFileName,
+      filePath,
+      fileUrl: `/uploads/${safeFileName}`,
+      url: `/uploads/${safeFileName}`,
+      fileSize: stats.size,
+      optimized: true
+    };
     
   } catch (error) {
     logger.error('Single file upload error', { 
@@ -179,10 +186,19 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<MultipleUploadResponse>
 ) {
+  // Set CORS headers for better compatibility
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   if (req.method !== 'POST') {
     return res.status(405).json({ 
       success: false, 
-      error: 'Method not allowed',
+      error: 'Method not allowed. Only POST requests are supported.',
       totalFiles: 0,
       successCount: 0,
       errorCount: 0,
@@ -293,18 +309,26 @@ export default async function handler(
     });
 
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    
     logger.error('Multiple upload API error', { 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      method: req.method,
+      url: req.url,
+      contentType: req.headers['content-type']
     });
     
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
-      totalFiles: 0,
-      successCount: 0,
-      errorCount: 0,
-      results: []
-    });
+    // Ensure we always send a proper JSON response
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: errorMessage,
+        totalFiles: 0,
+        successCount: 0,
+        errorCount: 0,
+        results: []
+      });
+    }
   }
 }

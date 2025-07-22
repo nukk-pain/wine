@@ -147,7 +147,24 @@ export default function MainPage() {
         body: formData,
       });
       
-      const uploadResult = await uploadResponse.json();
+      if (!uploadResponse.ok) {
+        throw new Error(`HTTP Error: ${uploadResponse.status} ${uploadResponse.statusText}`);
+      }
+      
+      let uploadResult;
+      try {
+        const responseText = await uploadResponse.text();
+        console.log('API Response text:', responseText.substring(0, 200) + (responseText.length > 200 ? '...' : ''));
+        
+        if (!responseText.trim()) {
+          throw new Error('Empty response from server');
+        }
+        
+        uploadResult = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        throw new Error('Invalid JSON response from server. Please check server logs.');
+      }
       
       if (!uploadResult.success) {
         throw new Error(uploadResult.error || 'Multiple upload failed');
