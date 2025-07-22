@@ -9,7 +9,7 @@ interface BatchResultDisplayProps {
   onSaveSelected: (selectedItems: ImageProcessingItem[]) => void;
   onSaveIndividual?: (itemId: string, wineData: NotionWineProperties) => Promise<boolean>;
   onAddManual?: (wineData: NotionWineProperties) => Promise<boolean>;
-  onDuplicate?: (itemId: string, wineData: NotionWineProperties) => void;
+  onRetryAnalysis?: (itemId: string) => Promise<void>;
   onDelete?: (itemId: string) => void;
   loading?: boolean;
   className?: string;
@@ -43,7 +43,7 @@ export function BatchResultDisplay({
   onSaveSelected, 
   onSaveIndividual,
   onAddManual,
-  onDuplicate,
+  onRetryAnalysis,
   onDelete,
   loading = false,
   className = '' 
@@ -388,24 +388,25 @@ export function BatchResultDisplay({
           </div>
           
           {/* Quick Actions */}
-          {(onDuplicate || onDelete) && (
+          {(onRetryAnalysis || onDelete) && (
             <div className="flex space-x-2">
-              {onDuplicate && (
+              {onRetryAnalysis && (
                 <button
                   onClick={() => {
-                    const notionData = convertToNotionFormat(data);
-                    onDuplicate(item.id, notionData);
+                    if (window.confirm('이 이미지를 다시 분석하시겠습니까? 현재 결과가 새로운 결과로 교체됩니다.')) {
+                      onRetryAnalysis(item.id);
+                    }
                   }}
-                  className="flex-1 bg-gray-500 text-white py-1 px-2 rounded text-xs font-medium hover:bg-gray-600 transition-colors"
-                  title="이 와인 복사"
+                  className="flex-1 bg-orange-500 text-white py-1 px-2 rounded text-xs font-medium hover:bg-orange-600 transition-colors"
+                  title="Gemini API로 이미지 재분석"
                 >
-                  📋 복사
+                  🔄 재요청
                 </button>
               )}
               {onDelete && (
                 <button
                   onClick={() => {
-                    if (window.confirm('이 와인 결과를 삭제하시결습니까?')) {
+                    if (window.confirm('이 와인 결과를 삭제하시겠습니까?')) {
                       onDelete(item.id);
                     }
                   }}

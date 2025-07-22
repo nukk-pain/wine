@@ -85,6 +85,10 @@ export const NOTION_PROPERTY_NAMES = {
 } as const;
 
 export function mapToNotionProperties(wineData: NotionWineProperties): Record<string, any> {
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔧 [NOTION-SCHEMA] Input wineData:', JSON.stringify(wineData, null, 2));
+  }
+  
   const properties: Record<string, any> = {};
 
   if (wineData.Name) {
@@ -144,12 +148,20 @@ export function mapToNotionProperties(wineData: NotionWineProperties): Record<st
     };
   }
 
-  if (wineData['Varietal(품종)'] && wineData['Varietal(품종)'].length > 0) {
-    properties[NOTION_PROPERTY_NAMES.VARIETAL] = {
-      multi_select: wineData['Varietal(품종)'].map(varietal => ({
-        name: varietal
-      }))
-    };
+  if (wineData['Varietal(품종)'] && Array.isArray(wineData['Varietal(품종)']) && wineData['Varietal(품종)'].length > 0) {
+    // Filter out empty strings and trim whitespace
+    const validVarietals = wineData['Varietal(품종)']
+      .filter(v => v && typeof v === 'string' && v.trim().length > 0)
+      .map(v => v.trim())
+      .slice(0, 100); // Limit to 100 items
+    
+    if (validVarietals.length > 0) {
+      properties[NOTION_PROPERTY_NAMES.VARIETAL] = {
+        multi_select: validVarietals.map(varietal => ({
+          name: varietal.substring(0, 100) // Limit to 100 characters
+        }))
+      };
+    }
   }
 
   if (wineData.Image) {
@@ -185,6 +197,10 @@ export function mapToNotionProperties(wineData: NotionWineProperties): Record<st
     }
   };
 
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔧 [NOTION-SCHEMA] Output properties:', JSON.stringify(properties, null, 2));
+  }
+
   return properties;
 }
 
@@ -194,8 +210,11 @@ export function validateWineData(data: Partial<NotionWineProperties>): {
 } {
   const errors: string[] = [];
 
+  // Check Name field (required)
   if (!data.Name || data.Name.trim() === '') {
     errors.push('Wine name is required');
+  } else if (data.Name.length > 2000) {
+    errors.push('Wine name is too long (max 2000 characters)');
   }
 
   if (data.Vintage !== null && data.Vintage !== undefined) {
@@ -210,6 +229,28 @@ export function validateWineData(data: Partial<NotionWineProperties>): {
 
   if (data.Quantity !== null && data.Quantity !== undefined && data.Quantity < 0) {
     errors.push('Quantity must be a positive number');
+  }
+
+  // Check text field lengths
+  if (data['Region/Producer'] && data['Region/Producer'].length > 2000) {
+    errors.push('Region/Producer is too long (max 2000 characters)');
+  }
+
+  if (data.Store && data.Store.length > 2000) {
+    errors.push('Store is too long (max 2000 characters)');
+  }
+
+  // Check Varietal array
+  if (data['Varietal(품종)'] && Array.isArray(data['Varietal(품종)'])) {
+    if (data['Varietal(품종)'].length > 100) {
+      errors.push('Too many varietals (max 100)');
+    }
+    for (const varietal of data['Varietal(품종)']) {
+      if (typeof varietal === 'string' && varietal.length > 100) {
+        errors.push('Varietal name is too long (max 100 characters)');
+        break;
+      }
+    }
   }
 
   return {

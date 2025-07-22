@@ -47,19 +47,45 @@ export async function saveWineToNotionV2(wineData: NotionWineProperties): Promis
   // Map to Notion properties format
   const properties = mapToNotionProperties(wineData);
 
-  console.log('Saving to Notion with properties:', JSON.stringify(properties, null, 2));
+  if (process.env.NODE_ENV === 'development') {
+    console.log('💾 [NOTION] Saving to Notion with properties:', JSON.stringify(properties, null, 2));
+    console.log('💾 [NOTION] Database ID:', DATABASE_ID);
+  }
 
-  const response = await notion.pages.create({
-    parent: {
-      database_id: DATABASE_ID
-    },
-    properties
-  });
+  try {
+    const response = await notion.pages.create({
+      parent: {
+        database_id: DATABASE_ID
+      },
+      properties
+    });
 
-  return {
-    id: response.id,
-    url: `https://notion.so/${response.id.replace(/-/g, '')}`
-  };
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ [NOTION] Successfully created page:', response.id);
+    }
+
+    return {
+      id: response.id,
+      url: `https://notion.so/${response.id.replace(/-/g, '')}`
+    };
+  } catch (notionError: any) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ [NOTION] Notion API Error Details:');
+      console.error('   Error:', notionError);
+      console.error('   Error code:', notionError.code);
+      console.error('   Error status:', notionError.status);
+      console.error('   Error body:', JSON.stringify(notionError.body, null, 2));
+    }
+    
+    // Re-throw with more specific error message
+    if (notionError.code === 'conflict') {
+      throw new Error('Notion conflict: This record may already exist or there may be a database schema mismatch');
+    } else if (notionError.code === 'validation_error') {
+      throw new Error(`Notion validation error: ${notionError.message || 'Invalid data format'}`);
+    } else {
+      throw new Error(`Notion API error: ${notionError.message || 'Unknown error'}`);
+    }
+  }
 }
 
 // Legacy function - maintained for backwards compatibility

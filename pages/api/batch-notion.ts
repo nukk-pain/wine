@@ -50,6 +50,7 @@ async function saveSingleItem(item: BatchNotionItem): Promise<BatchSaveResult> {
   try {
     if (process.env.NODE_ENV === 'development') {
       console.log(`💾 [BATCH-NOTION] Saving item ${item.id} (${item.type})`);
+      console.log('💾 [BATCH-NOTION] Raw extracted data:', JSON.stringify(item.extractedData, null, 2));
     }
 
     let notionResult: any;
@@ -57,6 +58,9 @@ async function saveSingleItem(item: BatchNotionItem): Promise<BatchSaveResult> {
     if (item.type === 'wine_label') {
       // Normalize data to ensure correct types
       const normalizedData = normalizeWineData(item.extractedData);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('💾 [BATCH-NOTION] Normalized data for Notion:', JSON.stringify(normalizedData, null, 2));
+      }
       notionResult = await saveWineToNotion(normalizedData, 'wine_label');
     } else if (item.type === 'receipt') {
       notionResult = await saveReceiptToNotion(item.extractedData);
@@ -92,7 +96,7 @@ async function saveSingleItem(item: BatchNotionItem): Promise<BatchSaveResult> {
 // Save multiple items to Notion with concurrency control
 async function batchSaveItems(
   items: BatchNotionItem[], 
-  maxConcurrent: number = 3
+  maxConcurrent: number = 1 // Reduce to 1 to avoid conflicts
 ): Promise<BatchSaveResult[]> {
   const results: BatchSaveResult[] = [];
   
@@ -126,9 +130,9 @@ async function batchSaveItems(
       }
     }
     
-    // Add small delay between batches to be gentle on Notion API
+    // Add delay between batches to be gentle on Notion API and avoid conflicts
     if (i + maxConcurrent < items.length) {
-      await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Increased to 1000ms delay
     }
   }
   
