@@ -1,5 +1,3 @@
-Always follow the instructions in plan.md. When I say "go", find the next unmarked test in plan.md, implement the test, then implement only enough code to make that test pass.
-
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -80,43 +78,93 @@ Always write one test at a time, make it run, then improve structure. Always run
 
 # PROJECT OVERVIEW
 
-This is a Wine Tracker application designed to run on a Synology NAS with PM2 process management. The application uses OCR to extract information from wine labels and receipts, then saves the data to a Notion database.
+This is a Wine Tracker application designed for both cloud (Vercel) and on-premise (Synology NAS) deployment. The application uses AI/OCR to extract information from wine labels and receipts, then saves the data to a Notion database.
 
 ## Technology Stack
 - **Frontend/Backend**: Next.js 14 with API Routes, TypeScript, Tailwind CSS
-- **Deployment**: Synology NAS + PM2
-- **OCR**: Google Vision API  
+- **Cloud Deployment**: Vercel with automatic CI/CD
+- **On-Premise Deployment**: Synology NAS + PM2 process management
+- **AI/OCR**: Google Vision API + Google Gemini API for text extraction and parsing
 - **Database**: Notion API
-- **Storage**: NAS local storage (/volume1/wine-photos/)
+- **Cloud Storage**: Vercel Blob (production), local filesystem (development/NAS)
 - **Testing**: Jest, React Testing Library, Playwright
 
 ## Architecture Overview
 
 The application follows a layered architecture:
-1. **UI Layer**: React components for image upload and result display
-2. **API Layer**: Next.js API routes for upload, processing, and Notion integration
+1. **UI Layer**: React components for image upload, camera capture, and result display
+2. **API Layer**: Next.js API routes
+   - `/api/upload` - Handles file uploads (supports Vercel Blob and local storage)
+   - `/api/process` - AI/OCR processing pipeline
+   - `/api/notion` - Notion database operations
 3. **Service Layer**: 
    - Image classification (wine labels vs receipts)
-   - OCR text extraction and parsing
+   - OCR text extraction (Google Vision API)
+   - AI parsing (Google Gemini API)
    - Notion database operations
-4. **Storage Layer**: Local NAS file system
+4. **Storage Layer**: Vercel Blob (cloud) or local filesystem (development/NAS)
 
 ## Key Development Commands
 
-Based on the project plan, this appears to be a Next.js application. Common commands would be:
-- `npm run dev` - Start development server
-- `npm run build` - Build production bundle
-- `npm run start` - Start production server
-- `npm test` - Run Jest tests
-- `npm run test:e2e` - Run Playwright E2E tests
+```bash
+# Development
+npm run dev                  # Start development server
+npm run build               # Build for production
+npm run start               # Start production server
+npm run type-check          # TypeScript type checking
 
-## NAS-Specific Configuration
+# Testing
+npm test                    # Run all Jest tests
+npm run test:unit          # Run unit tests only
+npm run test:integration   # Run integration tests
+npm run test:e2e           # Run Playwright E2E tests
+npm run test:watch         # Run tests in watch mode
+npm run test:ci            # Run all tests (continue on failure)
 
-- **Project Path**: `/volume2/web/wine/wine-tracker`
-- **Image Storage**: `/volume2/web/wine/wine-photos`
-- **PM2 Config**: `ecosystem.config.js`
-- **Production Port**: 3000
-- **Development Port**: 3001
+# Deployment
+npm run deploy             # Deploy to NAS (requires setup)
+npm run setup-nas          # Initial NAS setup
+vercel                     # Deploy to Vercel
+```
+
+## Environment Configuration
+
+The application uses environment-aware configuration (see `lib/config/index.ts`):
+
+- **Development**: Mock APIs available, local file storage, debug logging
+- **Production**: Real APIs, Vercel Blob or NAS storage, info logging  
+- **Test**: Mock APIs only, test file storage, minimal logging
+
+### Environment Variables
+
+For Vercel deployment:
+```
+NOTION_API_KEY=secret_xxx
+NOTION_DATABASE_ID=xxx-xxx-xxx
+GEMINI_API_KEY=xxx
+GOOGLE_APPLICATION_CREDENTIALS={"type":"service_account",...}
+```
+
+For local/NAS deployment:
+```
+NOTION_API_KEY=secret_xxx
+NOTION_DATABASE_ID=xxx-xxx-xxx
+GEMINI_API_KEY=xxx
+GOOGLE_APPLICATION_CREDENTIALS=./path/to/credentials.json
+UPLOAD_DIR=/custom/upload/path (optional)
+```
+
+## Testing Strategy
+
+The project includes comprehensive testing at multiple levels:
+
+1. **Unit Tests** (`__tests__/unit/`): Test individual parsers and utilities
+2. **Integration Tests** (`__tests__/integration/`): Test API endpoints and service integration
+3. **E2E Tests** (`__tests__/e2e/`): Full workflow testing with Playwright
+
+### Test Files
+- `test1.jpg`, `test2.jpg` - Sample wine label images for testing
+- Real image files are used in tests (no mocks for file operations)
 
 ## Core Workflow
 
@@ -136,9 +184,63 @@ The plan.md file contains a comprehensive development roadmap with 7 phases:
 6. User interface completion
 7. E2E testing and deployment
 
+## API Response Formats
+
+### Upload API Response
+```typescript
+{
+  success: boolean;
+  fileName: string;
+  filePath: string;
+  fileUrl: string;
+  url: string;        // For Vercel Blob compatibility
+  fileSize: number;
+  optimized: boolean;
+}
+```
+
+### Process API Response
+```typescript
+{
+  imageType: 'wine_label' | 'receipt';
+  wines?: Array<{
+    name: string;
+    vintage?: number;
+    producer?: string;
+    region?: string;
+    varietal?: string;
+    price?: number;
+    quantity?: number;
+  }>;
+  receiptData?: {
+    store: string;
+    date: string;
+    items: Array<{...}>
+  };
+}
+```
+
+## Deployment Notes
+
+### Vercel Deployment
+- Automatic deployment on push to main branch
+- Environment variables set in Vercel dashboard
+- Uses Vercel Blob for image storage
+- Serverless functions with 10s timeout (can be increased)
+
+### NAS Deployment
+- Manual deployment using `npm run deploy`
+- PM2 for process management
+- Local filesystem for image storage
+- Configurable ports and paths in `ecosystem.config.js`
+
 ## Development Tools and Libraries
 
-- Use shadcn ui
+- Use shadcn ui for UI components
+- Formidable for file upload handling
+- Sharp for image optimization
+- Winston for logging (file + console)
+- Node-cache for in-memory caching
 
 # TEST ENVIRONMENT CONSIDERATIONS
 
