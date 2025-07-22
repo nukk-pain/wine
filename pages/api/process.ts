@@ -7,7 +7,6 @@ import { processWineImage } from '@/lib/vision';
 import { geminiService } from '@/lib/gemini';
 import { saveWineToNotion, saveReceiptToNotion } from '@/lib/notion';
 import { normalizeWineData } from '@/lib/data-normalizer';
-import logger from '@/lib/config/logger';
 
 // 이미지 저장 경로 설정 (개발/프로덕션 환경에 따라 다름)
 const WINE_PHOTOS_DIR = process.env.NODE_ENV === 'production' 
@@ -204,7 +203,7 @@ export default async function handler(
       }
     }
 
-    logger.info('Processing image', {
+    console.log('Processing image:', {
       filename: imageFile?.originalFilename || 'URL-based',
       size: imageFile?.size || 'unknown',
       type: type,
@@ -249,7 +248,7 @@ export default async function handler(
           mimeType = imageFile.mimetype || 'image/jpeg';
         }
         
-        logger.info('Starting Gemini processing', { 
+        console.log('Starting Gemini processing:', { 
           imageType, 
           bufferSize: imageBuffer.length, 
           mimeType 
@@ -259,7 +258,7 @@ export default async function handler(
         if (imageType === 'auto') {
           // Auto-detect image type
           const classifiedType = await geminiService.classifyImage(imageBuffer, mimeType);
-          logger.info('Image classified', { classifiedType });
+          console.log('Image classified:', { classifiedType });
           
           if (classifiedType === 'unknown') {
             return res.status(400).json({
@@ -274,19 +273,25 @@ export default async function handler(
         // Extract information based on type
         if (imageType === 'wine_label') {
           extractedData = await geminiService.extractWineInfo(imageBuffer, mimeType);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🍷 [API] Gemini wine data extracted:', JSON.stringify(extractedData, null, 2));
+          }
         } else if (imageType === 'receipt') {
           extractedData = await geminiService.extractReceiptInfo(imageBuffer, mimeType);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🧾 [API] Gemini receipt data extracted:', JSON.stringify(extractedData, null, 2));
+          }
         }
         
-        logger.info('Gemini processing completed', { imageType, hasData: !!extractedData });
+        console.log('Gemini processing completed:', { imageType, hasData: !!extractedData });
       } catch (geminiError) {
-        logger.error('Gemini API error', { 
+        console.error('Gemini API error:', { 
           error: geminiError instanceof Error ? geminiError.message : 'Unknown Gemini error',
           stack: geminiError instanceof Error ? geminiError.stack : undefined
         });
         
         // Fallback to vision API
-        logger.info('Falling back to Vision API');
+        console.log('Falling back to Vision API');
         const imagePath = imageUrl || imageFile.filepath;
         const visionResult = await processWineImage(imagePath);
         extractedData = visionResult.data;
@@ -316,7 +321,7 @@ export default async function handler(
           savedImagePath = await saveImagePermanently(imageFile);
         }
       } catch (error) {
-        logger.warn('Failed to save image permanently', { 
+        console.warn('Failed to save image permanently:', { 
           filepath: imageFile.filepath,
           error: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -336,7 +341,13 @@ export default async function handler(
           type: imageType,
           extractedData: extractedData,
           savedImagePath: savedImagePath
-        }
+        },
+        // Include debug info in development or when requested
+        debug: process.env.NODE_ENV === 'development' || req.query.debug ? {
+          geminiRawData: extractedData,
+          imageType: imageType,
+          processingPath: 'skipNotion=true'
+        } : undefined
       });
     }
 
@@ -347,6 +358,10 @@ export default async function handler(
     if (imageType === 'wine_label') {
       // Normalize data to ensure correct types
       const normalizedData = normalizeWineData(extractedData);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 [API] Data after normalization:', JSON.stringify(normalizedData, null, 2));
+        console.log('🚀 [API] About to save to Notion...');
+      }
       notionResult = await saveWineToNotion(normalizedData, 'wine_label');
       
       return res.status(200).json({
@@ -356,7 +371,13 @@ export default async function handler(
           extractedData: extractedData,
           notionResult: notionResult,
           savedImagePath: savedImagePath
-        }
+        },
+        // Include debug info in development or when requested
+        debug: process.env.NODE_ENV === 'development' || req.query.debug ? {
+          geminiRawData: extractedData,
+          normalizedData: normalizedData,
+          finalNotionData: notionResult
+        } : undefined
       });
     } else if (imageType === 'receipt') {
       notionResults = await saveReceiptToNotion(extractedData);
@@ -368,12 +389,17 @@ export default async function handler(
           extractedData: extractedData,
           notionResults: notionResults,
           savedImagePath: savedImagePath
-        }
+        },
+        // Include debug info in development or when requested
+        debug: process.env.NODE_ENV === 'development' || req.query.debug ? {
+          geminiRawData: extractedData,
+          finalNotionResults: notionResults
+        } : undefined
       });
     }
 
   } catch (error) {
-    logger.error('Process API error', { 
+    console.error('Process API error:', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
     });
@@ -401,7 +427,7 @@ async function saveImagePermanently(imageFile: formidable.File): Promise<string>
   // 임시 파일 삭제
   await fs.unlink(imageFile.filepath);
   
-  logger.info('Image saved permanently', {
+  console.log('Image saved permanently:', {
     originalName: imageFile.originalFilename,
     savedPath: targetPath,
     fileName

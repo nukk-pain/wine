@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ImageProcessingItem } from './ImagePreviewGrid';
 import { NotionWineProperties } from '@/lib/notion-schema';
+import { DebugInfo } from './DebugInfo';
 
 interface BatchResultDisplayProps {
   items: ImageProcessingItem[];
@@ -313,6 +314,12 @@ export function BatchResultDisplay({
 
     return (
       <div className="mt-3 space-y-3">
+        {/* Debug information for development */}
+        <DebugInfo 
+          data={item.result} 
+          title="API 응답 데이터"
+        />
+        
         {(data.Name || data.wine_name) && (
           <div className="text-lg font-bold text-gray-900">
             {data.Name || data.wine_name}

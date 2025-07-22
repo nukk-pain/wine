@@ -138,6 +138,7 @@ export class GeminiService {
       
       if (process.env.NODE_ENV === 'development') {
         console.log('🎉 [Gemini] Successfully parsed wine info:');
+        console.log('   Raw parsed data:', JSON.stringify(wineInfo, null, 2));
         console.log('   Wine Name:', wineInfo.Name);
         console.log('   Region/Producer:', wineInfo['Region/Producer']);
         console.log('   Vintage:', wineInfo.Vintage);

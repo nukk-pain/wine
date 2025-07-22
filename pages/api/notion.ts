@@ -44,7 +44,7 @@ export default async function handler(
   }
 
   try {
-    const { action, data, source, pageId, status } = req.body;
+    const { action, data, source, pageId, status, imageUrl } = req.body;
 
     if (!action) {
       return res.status(400).json({
@@ -147,6 +147,28 @@ export default async function handler(
           success: false,
           error: 'Invalid action'
         });
+    }
+
+    // Cleanup Vercel Blob file if save was successful and we have an imageUrl
+    if (result && imageUrl && imageUrl.includes('vercel-storage.com')) {
+      try {
+        const cleanupResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/cleanup-blobs`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ urls: [imageUrl] })
+        });
+        
+        if (cleanupResponse.ok) {
+          console.log('✅ [NOTION] Blob cleanup successful for:', imageUrl);
+        } else {
+          console.warn('⚠️ [NOTION] Blob cleanup failed:', cleanupResponse.statusText);
+        }
+      } catch (cleanupError) {
+        console.warn('⚠️ [NOTION] Blob cleanup error:', cleanupError);
+        // Don't fail the main operation if cleanup fails
+      }
     }
 
     res.status(200).json({

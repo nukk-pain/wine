@@ -2,7 +2,6 @@ import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { classifyImage, ImageType } from './parsers/image-classifier';
 import { parseWineLabel } from './parsers/wine-label';
 import { parseReceipt } from './parsers/receipt';
-import { visionLogger } from './config/logger';
 import { 
   generateCacheKey, 
   getCachedResult, 
@@ -25,7 +24,7 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
   const startTime = Date.now();
   const requestId = generateRequestId();
   
-  visionLogger.info('Wine image processing started', {
+  console.log('Wine image processing started:', {
     requestId,
     imageUrl: maskSensitiveData(imageUrl),
     timestamp: new Date().toISOString()
@@ -33,20 +32,26 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
 
   try {
     // 1. OCR로 텍스트 추출
-    visionLogger.debug('Starting OCR text extraction', { requestId });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Starting OCR text extraction:', { requestId });
+    }
     const extractedText = await extractTextFromImage(imageUrl);
     
-    visionLogger.debug('OCR completed', {
-      requestId,
-      textLength: extractedText.length,
-      hasText: extractedText.length > 0
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('OCR completed:', {
+        requestId,
+        textLength: extractedText.length,
+        hasText: extractedText.length > 0
+      });
+    }
     
     // 2. 이미지 타입 분류
-    visionLogger.debug('Starting image classification', { requestId });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Starting image classification:', { requestId });
+    }
     const classification = await classifyImage(extractedText);
     
-    visionLogger.info('Image classified', {
+    console.log('Image classified:', {
       requestId,
       imageType: classification.type,
       confidence: classification.confidence,
@@ -60,7 +65,9 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
     try {
       switch (classification.type) {
         case ImageType.WINE_LABEL:
-          visionLogger.debug('Parsing wine label data', { requestId });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Parsing wine label data:', { requestId });
+          }
           const wineData = parseWineLabel(extractedText);
           
           let geminiData = null;
@@ -68,11 +75,13 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
           
           try {
             // Use Gemini to refine the OCR text
-            visionLogger.debug('Calling Gemini for data refinement', { requestId });
+            if (process.env.NODE_ENV === 'development') {
+              console.log('Calling Gemini for data refinement:', { requestId });
+            }
             geminiData = await refineWineDataWithGemini(extractedText);
             usedGemini = true;
           } catch (geminiError) {
-            visionLogger.warn('Gemini refinement failed, falling back to rule-based parser', {
+            console.warn('Gemini refinement failed, falling back to rule-based parser:', {
               requestId,
               error: geminiError instanceof Error ? geminiError.message : 'Unknown error'
             });
@@ -89,17 +98,21 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
             quantity: undefined
           };
           
-          visionLogger.debug('Wine label parsing completed', {
-            requestId,
-            hasName: !!parsedData.name,
-            hasVintage: !!parsedData.vintage,
-            hasProducer: !!parsedData['Region/Producer'],
-            usedGemini
-          });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Wine label parsing completed:', {
+              requestId,
+              hasName: !!parsedData.name,
+              hasVintage: !!parsedData.vintage,
+              hasProducer: !!parsedData['Region/Producer'],
+              usedGemini
+            });
+          }
           break;
           
         case ImageType.RECEIPT:
-          visionLogger.debug('Parsing receipt data', { requestId });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Parsing receipt data:', { requestId });
+          }
           const receiptData = parseReceipt(extractedText);
           // Map to ReceiptData interface expected by ResultDisplay
           parsedData = {
@@ -108,16 +121,18 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
             total: receiptData.total || 0
           };
           
-          visionLogger.debug('Receipt parsing completed', {
-            requestId,
-            hasStore: !!receiptData.store,
-            itemCount: receiptData.items?.length || 0,
-            hasTotal: !!receiptData.total
-          });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Receipt parsing completed:', {
+              requestId,
+              hasStore: !!receiptData.store,
+              itemCount: receiptData.items?.length || 0,
+              hasTotal: !!receiptData.total
+            });
+          }
           break;
           
         default:
-          visionLogger.warn('Unknown image type detected', {
+          console.warn('Unknown image type detected:', {
             requestId,
             imageType: classification.type,
             confidence: classification.confidence
@@ -126,7 +141,7 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
       }
     } catch (parseError: any) {
       parsingError = parseError;
-      visionLogger.error('Data parsing failed', {
+      console.error('Data parsing failed:', {
         requestId,
         imageType: classification.type,
         error: {
@@ -149,7 +164,7 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
       rawText: extractedText
     };
     
-    visionLogger.info('Wine image processing completed', {
+    console.log('Wine image processing completed:', {
       requestId,
       imageType: classification.type,
       confidence: classification.confidence,
@@ -164,7 +179,7 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
   } catch (error: any) {
     const processingTime = Date.now() - startTime;
     
-    visionLogger.error('Wine image processing failed', {
+    console.error('Wine image processing failed:', {
       requestId,
       imageUrl: maskSensitiveData(imageUrl),
       error: {
@@ -192,7 +207,7 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
   const requestId = generateRequestId();
   const config = getConfig();
   
-  visionLogger.info('Vision API request started', {
+  console.log('Vision API request started:', {
     requestId,
     imageUrl: maskSensitiveData(imageUrl),
     timestamp: new Date().toISOString(),
@@ -210,7 +225,7 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
       // 테스트/모의 환경에서 모의 OCR 결과 반환
       const mockText = getMockTextForTestImage(imageUrl);
       
-      visionLogger.info('Vision API mock response', {
+      console.log('Vision API mock response:', {
         requestId,
         imageUrl: maskSensitiveData(imageUrl),
         textLength: mockText.length,
@@ -235,7 +250,7 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
       if (cachedResult !== undefined) {
         const processingTime = Date.now() - startTime;
         
-        visionLogger.info('Vision API cache hit', {
+        console.log('Vision API cache hit:', {
           requestId,
           imageUrl: maskSensitiveData(imageUrl),
           cacheKey,
@@ -275,13 +290,15 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
     
     const detections = result.textAnnotations;
     
-    visionLogger.debug('Vision API request completed', {
-      requestId,
-      imageUrl: maskSensitiveData(imageUrl),
-      requestType: imageUrl.startsWith('http') ? 'url' : 'file',
-      annotationCount: detections?.length || 0,
-      timeout
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Vision API request completed:', {
+        requestId,
+        imageUrl: maskSensitiveData(imageUrl),
+        requestType: imageUrl.startsWith('http') ? 'url' : 'file',
+        annotationCount: detections?.length || 0,
+        timeout
+      });
+    }
     
     // 8. 결과 처리
     const extractedText = detections && detections.length > 0 
@@ -298,7 +315,7 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
     const cacheStats = isServiceEnabled('cache') ? getCacheStats() : null;
     
     // 10. 성공 로깅
-    visionLogger.info('Vision API request successful', {
+    console.log('Vision API request successful:', {
       requestId,
       imageUrl: maskSensitiveData(imageUrl),
       textLength: extractedText.length,
@@ -315,7 +332,7 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
   } catch (error: any) {
     const processingTime = Date.now() - startTime;
     
-    visionLogger.error('Vision API request failed', {
+    console.error('Vision API request failed:', {
       requestId,
       imageUrl: maskSensitiveData(imageUrl),
       error: {

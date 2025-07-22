@@ -3,9 +3,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import fs from 'fs/promises';
 import path from 'path';
-import { put } from '@vercel/blob';
+import { put, del } from '@vercel/blob';
 import sharp from 'sharp';
-import logger from '@/lib/config/logger';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -33,8 +32,9 @@ interface MultipleUploadResponse {
 export const config = {
   api: {
     bodyParser: false, // Disable bodyParser for formidable to handle multipart
-    sizeLimit: '50mb', // Allow larger uploads for multiple files
+    sizeLimit: '25mb', // Reduced from 50mb for Vercel compatibility
   },
+  maxDuration: 60, // Allow up to 60 seconds for processing
 };
 
 // Validate individual file
@@ -84,83 +84,90 @@ async function processSingleFile(file: formidable.File): Promise<UploadResult> {
     const ext = path.extname(file.originalFilename || '.jpg');
     const safeFileName = `wine_${timestamp}_${randomSuffix}${ext}`;
 
-    // Determine if we're in Vercel environment
-    if (process.env.VERCEL) {
-      // Vercel Blob upload
-      const imageBuffer = await fs.readFile(file.filepath);
-      
-      // Optimize image with Sharp
-      const optimizedBuffer = await sharp(imageBuffer)
-        .resize(1920, 1920, { 
-          fit: 'inside', 
-          withoutEnlargement: true 
-        })
-        .jpeg({ 
-          quality: 85,
-          progressive: true 
-        })
-        .toBuffer();
+    // Determine if we're in Vercel environment and have blob token
+    if (process.env.VERCEL && process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        // Vercel Blob upload
+        const imageBuffer = await fs.readFile(file.filepath);
+        
+        // Optimize image with Sharp
+        const optimizedBuffer = await sharp(imageBuffer)
+          .resize(1920, 1920, { 
+            fit: 'inside', 
+            withoutEnlargement: true 
+          })
+          .jpeg({ 
+            quality: 85,
+            progressive: true 
+          })
+          .toBuffer();
 
-      const blob = await put(safeFileName, optimizedBuffer, {
-        access: 'public',
-        contentType: 'image/jpeg'
-      });
+        const blob = await put(safeFileName, optimizedBuffer, {
+          access: 'public',
+          contentType: 'image/jpeg'
+        });
 
-      // Clean up temp file
-      await fs.unlink(file.filepath).catch(() => {});
+        // Clean up temp file
+        await fs.unlink(file.filepath).catch(() => {});
 
-      return {
-        success: true,
-        fileName: safeFileName,
-        filePath: blob.url,
-        fileUrl: blob.url,
-        url: blob.url,
-        fileSize: optimizedBuffer.length,
-        optimized: true
-      };
-      
-    } else {
-      // Local storage
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-      await fs.mkdir(uploadDir, { recursive: true });
-      
-      const filePath = path.join(uploadDir, safeFileName);
-      
-      // Read and optimize image
-      const imageBuffer = await fs.readFile(file.filepath);
-      const optimizedBuffer = await sharp(imageBuffer)
-        .resize(1920, 1920, { 
-          fit: 'inside', 
-          withoutEnlargement: true 
-        })
-        .jpeg({ 
-          quality: 85,
-          progressive: true 
-        })
-        .toBuffer();
-      
-      // Save optimized image
-      await fs.writeFile(filePath, optimizedBuffer);
-      
-      // Clean up temp file
-      await fs.unlink(file.filepath).catch(() => {});
-      
-      // Get file stats
-      const stats = await fs.stat(filePath);
-      
-      return {
-        success: true,
-        fileName: safeFileName,
-        filePath,
-        fileUrl: `/uploads/${safeFileName}`,
-        url: `/uploads/${safeFileName}`,
-        fileSize: stats.size,
-        optimized: true
-      };
+        return {
+          success: true,
+          fileName: safeFileName,
+          filePath: blob.url,
+          fileUrl: blob.url,
+          url: blob.url,
+          fileSize: optimizedBuffer.length,
+          optimized: true
+        };
+      } catch (blobError) {
+        console.warn('Vercel Blob upload failed, falling back to local storage:', {
+          error: blobError instanceof Error ? blobError.message : 'Unknown blob error',
+          fileName: safeFileName
+        });
+        // Fall through to local storage
+      }
     }
     
+    // Local storage (fallback or default)
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    await fs.mkdir(uploadDir, { recursive: true });
+    
+    const filePath = path.join(uploadDir, safeFileName);
+    
+    // Read and optimize image
+    const imageBuffer = await fs.readFile(file.filepath);
+    const optimizedBuffer = await sharp(imageBuffer)
+      .resize(1920, 1920, { 
+        fit: 'inside', 
+        withoutEnlargement: true 
+      })
+      .jpeg({ 
+        quality: 85,
+        progressive: true 
+      })
+      .toBuffer();
+    
+    // Save optimized image
+    await fs.writeFile(filePath, optimizedBuffer);
+    
+    // Clean up temp file
+    await fs.unlink(file.filepath).catch(() => {});
+    
+    // Get file stats
+    const stats = await fs.stat(filePath);
+    
+    return {
+      success: true,
+      fileName: safeFileName,
+      filePath,
+      fileUrl: `/uploads/${safeFileName}`,
+      url: `/uploads/${safeFileName}`,
+      fileSize: stats.size,
+      optimized: true
+    };
+    
   } catch (error) {
-    logger.error('Single file upload error', { 
+    console.error('Single file upload error:', { 
       filename: file.originalFilename,
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -179,10 +186,65 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<MultipleUploadResponse>
 ) {
+  const startTime = Date.now();
+  
+  console.log('Multiple upload API called:', {
+    method: req.method,
+    url: req.url,
+    contentType: req.headers['content-type'],
+    userAgent: req.headers['user-agent'],
+    vercelEnv: process.env.VERCEL_ENV || 'none'
+  });
+  // Set CORS headers for better compatibility
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  // Temporary GET endpoint for debugging
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      success: true,
+      totalFiles: 0,
+      successCount: 0,
+      errorCount: 0,
+      results: [],
+      error: `API is working - ${new Date().toISOString()} - Vercel: ${!!process.env.VERCEL}`
+    });
+  }
+  
   if (req.method !== 'POST') {
+    console.warn('Invalid HTTP method:', { 
+      method: req.method, 
+      url: req.url,
+      headers: req.headers
+    });
+    
     return res.status(405).json({ 
       success: false, 
-      error: 'Method not allowed',
+      error: `Method ${req.method} not allowed. Only POST requests are supported.`,
+      totalFiles: 0,
+      successCount: 0,
+      errorCount: 0,
+      results: []
+    });
+  }
+  
+  // Validate Content-Type for POST requests
+  const contentType = req.headers['content-type'];
+  if (!contentType || !contentType.includes('multipart/form-data')) {
+    console.warn('Invalid content type:', { 
+      contentType, 
+      method: req.method,
+      url: req.url
+    });
+    
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Content-Type must be multipart/form-data for file uploads',
       totalFiles: 0,
       successCount: 0,
       errorCount: 0,
@@ -203,9 +265,12 @@ export default async function handler(
     const form = formidable({
       keepExtensions: true,
       maxFileSize: MAX_FILE_SIZE,
-      maxFiles: 10, // Limit to 10 files maximum
+      maxFiles: process.env.VERCEL ? 5 : 10, // Reduced limit for Vercel
+      maxTotalFileSize: process.env.VERCEL ? 25 * 1024 * 1024 : 50 * 1024 * 1024, // 25MB for Vercel, 50MB for local
       uploadDir: uploadDir,
       multiples: true, // Enable multiple files
+      allowEmptyFiles: false,
+      minFileSize: 1, // At least 1 byte
       filter: ({ mimetype }) => {
         return mimetype ? ALLOWED_TYPES.includes(mimetype) : false;
       }
@@ -273,7 +338,7 @@ export default async function handler(
     const successCount = results.filter(r => r.success).length;
     const errorCount = results.filter(r => !r.success).length;
 
-    logger.info('Multiple file upload completed', {
+    console.log('Multiple file upload completed:', {
       totalFiles: fileArray.length,
       successCount,
       errorCount
@@ -293,18 +358,26 @@ export default async function handler(
     });
 
   } catch (error) {
-    logger.error('Multiple upload API error', { 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    
+    console.error('Multiple upload API error:', { 
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      method: req.method,
+      url: req.url,
+      contentType: req.headers['content-type']
     });
     
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
-      totalFiles: 0,
-      successCount: 0,
-      errorCount: 0,
-      results: []
-    });
+    // Ensure we always send a proper JSON response
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: errorMessage,
+        totalFiles: 0,
+        successCount: 0,
+        errorCount: 0,
+        results: []
+      });
+    }
   }
 }

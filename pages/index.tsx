@@ -136,42 +136,212 @@ export default function MainPage() {
     setLoading(true);
     
     try {
-      // First upload all files using the upload-multiple API
-      const formData = new FormData();
-      files.forEach(file => {
-        formData.append('files', file);
-      });
+      console.log(`📤 [CLIENT] Starting batch upload for ${files.length} files`);
       
-      const uploadResponse = await fetch('/api/upload-multiple', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      const uploadResult = await uploadResponse.json();
-      
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Multiple upload failed');
+      // Split files into batches of 5
+      const BATCH_SIZE = 5;
+      const batches: File[][] = [];
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        batches.push(files.slice(i, i + BATCH_SIZE));
       }
       
-      // Create processing items with upload results
-      const newItems: ImageProcessingItem[] = uploadResult.results.map((result: any, index: number) => ({
+      console.log(`📦 [CLIENT] Split into ${batches.length} batches`);
+      
+      // Initialize processing items for all files
+      const allItems: ImageProcessingItem[] = files.map((file, index) => ({
         id: `${Date.now()}-${index}`,
-        file: files[index],
-        url: result.success ? result.fileUrl : URL.createObjectURL(files[index]),
-        status: result.success ? 'uploaded' : 'error',
-        error: result.success ? undefined : result.error,
-        uploadResult: result
+        file,
+        url: URL.createObjectURL(file),
+        status: 'uploaded',
+        uploadResult: null
       }));
       
-      setProcessingItems(newItems);
+      setProcessingItems(allItems);
       
-      console.log(`Multiple images uploaded: ${uploadResult.successCount}/${files.length} successful`);
+      // Process each batch sequentially
+      const allResults: any[] = [];
+      
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        console.log(`📋 [CLIENT] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} files)`);
+        
+        try {
+          // Use individual uploads instead of batch upload API
+          const batchResults = await Promise.allSettled(
+            batch.map(async (file, fileIndex) => {
+              const formData = new FormData();
+              formData.append('file', file);
+              
+              const uploadResponse = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+              });
+              
+              if (!uploadResponse.ok) {
+                throw new Error(`HTTP Error: ${uploadResponse.status} ${uploadResponse.statusText}`);
+              }
+              
+              const result = await uploadResponse.json();
+              if (!result.success) {
+                throw new Error(result.error || 'Upload failed');
+              }
+              
+              return result;
+            })
+          );
+          
+          // Convert Promise.allSettled results to upload results format
+          const uploadResults = batchResults.map((result, index) => {
+            if (result.status === 'fulfilled') {
+              return {
+                success: true,
+                fileUrl: result.value.url || result.value.fileUrl,
+                fileName: result.value.fileName,
+                fileSize: result.value.fileSize
+              };
+            } else {
+              return {
+                success: false,
+                error: result.reason?.message || 'Upload failed'
+              };
+            }
+          });
+          
+          // Create mock response to match expected format
+          const successCount = uploadResults.filter(r => r.success).length;
+          const uploadResult = {
+            success: true,
+            results: uploadResults,
+            successCount,
+            failedCount: uploadResults.length - successCount
+          };
+          
+          // Add results from this batch
+          allResults.push(...uploadResult.results);
+          
+          console.log(`✅ [CLIENT] Batch ${batchIndex + 1} completed: ${uploadResult.successCount}/${batch.length} successful`);
+          
+        } catch (batchError) {
+          console.error(`❌ [CLIENT] Batch ${batchIndex + 1} failed:`, batchError);
+          
+          // Add error results for this batch
+          batch.forEach(() => {
+            allResults.push({
+              success: false,
+              error: `Batch ${batchIndex + 1} failed: ${batchError instanceof Error ? batchError.message : 'Unknown error'}`
+            });
+          });
+        }
+      }
+      
+      // Update processing items with final results
+      const updatedItems: ImageProcessingItem[] = files.map((file, index) => {
+        const result = allResults[index];
+        return {
+          id: `${Date.now()}-${index}`,
+          file,
+          url: result?.success ? result.fileUrl : URL.createObjectURL(file),
+          status: result?.success ? 'uploaded' : 'error',
+          error: result?.success ? undefined : result.error,
+          uploadResult: result
+        };
+      });
+      
+      setProcessingItems(updatedItems);
+      
+      const successCount = allResults.filter(r => r?.success).length;
+      console.log(`🎉 [CLIENT] All batches completed: ${successCount}/${files.length} files successful`);
+      
+      // 🚨 CRITICAL FIX: Auto-process uploaded images
+      if (successCount > 0) {
+        console.log(`🔄 [CLIENT] Starting auto-processing for ${successCount} uploaded images...`);
+        await handleBatchAnalyze(updatedItems.filter(item => item.status === 'uploaded'));
+      }
       
     } catch (error) {
       setError(`업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
       console.error('Multiple upload error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Auto-process uploaded images
+  const handleBatchAnalyze = async (items: ImageProcessingItem[]) => {
+    if (items.length === 0) return;
+    
+    console.log(`🔄 [CLIENT] Processing ${items.length} uploaded images...`);
+    
+    // Update status to processing
+    setProcessingItems(prevItems => 
+      prevItems.map(item => 
+        items.find(i => i.id === item.id) 
+          ? { ...item, status: 'processing', progress: 0 }
+          : item
+      )
+    );
+    
+    try {
+      // Use process-multiple API
+      const response = await fetch('/api/process-multiple', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          images: items.map(item => ({
+            id: item.id,
+            url: item.url,
+            type: 'wine_label' // Default to wine_label, let Gemini auto-classify
+          })),
+          useGemini: 'true',
+          skipNotion: 'true' // Skip Notion for now, save manually later
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.results) {
+        console.log(`✅ [CLIENT] Processing completed: ${result.successCount}/${result.totalImages} successful`);
+        
+        // Update items with processing results
+        setProcessingItems(prevItems => 
+          prevItems.map(item => {
+            const processResult = result.results.find((r: any) => r.id === item.id);
+            if (processResult) {
+              return {
+                ...item,
+                status: processResult.success ? 'completed' : 'error',
+                result: processResult.success ? {
+                  extractedData: processResult.extractedData,
+                  type: processResult.type
+                } : undefined,
+                error: processResult.success ? undefined : processResult.error,
+                progress: processResult.success ? 100 : 0
+              };
+            }
+            return item;
+          })
+        );
+      } else {
+        throw new Error(result.error || 'Processing failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ [CLIENT] Batch processing failed:', error);
+      
+      // Update items with error status
+      setProcessingItems(prevItems => 
+        prevItems.map(item => 
+          items.find(i => i.id === item.id) 
+            ? { ...item, status: 'error', error: error instanceof Error ? error.message : 'Processing failed' }
+            : item
+        )
+      );
     }
   };
 
@@ -291,60 +461,111 @@ export default function MainPage() {
       
       console.log('🚀 [CLIENT] Starting batch analysis for', imagesToProcess.length, 'images');
       
-      // Use the process-multiple API
-      const response = await fetch('/api/process-multiple', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          images: imagesToProcess,
-          useGemini: 'true',
-          skipNotion: 'true'
-        }),
-      });
+      // Use individual process API calls instead of batch
+      console.log('🚀 [CLIENT] Starting individual analysis for', imagesToProcess.length, 'images');
       
-      const result = await response.json();
+      // Process each item individually using Promise.allSettled
+      const analysisResults = await Promise.allSettled(
+        imagesToProcess.map(async (item, index) => {
+          try {
+            // Update individual item progress
+            setProcessingItems(items => 
+              items.map(i => 
+                i.id === item.id 
+                  ? { ...i, status: 'processing', progress: 25 }
+                  : i
+              )
+            );
+            
+            const response = await fetch('/api/process', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                imageUrl: item.url,
+                useGemini: 'true',
+                skipNotion: 'true'
+              }),
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP Error: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+              throw new Error(result.error || 'Analysis failed');
+            }
+            
+            return {
+              id: item.id,
+              success: true,
+              extractedData: result.data.extractedData,
+              type: result.data.type
+            };
+            
+          } catch (error) {
+            return {
+              id: item.id,
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            };
+          }
+        })
+      );
       
-      console.log('📨 [CLIENT] Batch analysis response received');
-      console.log('   Success:', result.success);
-      console.log('   Total:', result.totalImages);
-      console.log('   Success count:', result.successCount);
-      console.log('   Error count:', result.errorCount);
-      
-      if (response.ok && result.success) {
-        // Update items with results
-        setProcessingItems(items => 
-          items.map(item => {
-            const apiResult = result.results.find((r: any) => r.id === item.id);
-            if (apiResult) {
+      // Update all items with their analysis results
+      setProcessingItems(items => 
+        items.map(item => {
+          const analysisResult = analysisResults.find((r, index) => {
+            if (r.status === 'fulfilled') {
+              return r.value.id === item.id;
+            } else if (r.status === 'rejected') {
+              return itemsToProcess[index]?.id === item.id;
+            }
+            return false;
+          });
+          
+          if (analysisResult) {
+            if (analysisResult.status === 'fulfilled') {
+              const result = analysisResult.value;
               return {
                 ...item,
-                status: apiResult.success ? 'completed' : 'error',
-                result: apiResult.success ? { extractedData: apiResult.extractedData, type: apiResult.type } : undefined,
-                error: apiResult.success ? undefined : apiResult.error,
-                progress: apiResult.success ? 100 : 0
+                status: result.success ? 'completed' : 'error',
+                result: result.success ? { extractedData: result.extractedData, type: result.type } : undefined,
+                error: result.success ? undefined : result.error,
+                progress: result.success ? 100 : 0
+              };
+            } else {
+              return {
+                ...item,
+                status: 'error',
+                error: 'Analysis failed unexpectedly',
+                progress: 0
               };
             }
-            return item;
-          })
-        );
-        
-        console.log('✅ [CLIENT] Batch analysis completed successfully!');
-        
-      } else {
-        throw new Error(result.error || 'Batch processing failed');
-      }
+          }
+          return item;
+        })
+      );
+      
+      const successCount = analysisResults.filter(r => 
+        r.status === 'fulfilled' && r.value.success
+      ).length;
+      
+      console.log(`✅ [CLIENT] Individual analysis completed: ${successCount}/${itemsToProcess.length} successful`);
       
     } catch (error) {
-      console.error('❌ [CLIENT] Batch analysis failed:', error);
+      console.error('❌ [CLIENT] Individual analysis failed:', error);
       setError(`분석 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
       
       // Reset processing items back to uploaded/error status
       setProcessingItems(items => 
         items.map(item => 
           item.status === 'processing'
-            ? { ...item, status: 'error', error: 'Batch processing failed', progress: 0 }
+            ? { ...item, status: 'error', error: 'Analysis processing failed', progress: 0 }
             : item
         )
       );
@@ -512,7 +733,8 @@ export default function MainPage() {
       const itemsForSave = completedItems.map(item => ({
         id: item.id,
         type: 'wine_label' as const,
-        extractedData: item.result?.extractedData || {}
+        extractedData: item.result?.extractedData || {},
+        imageUrl: item.url // Include imageUrl for blob cleanup
       }));
 
       const response = await fetch('/api/batch-notion', {
@@ -566,7 +788,8 @@ export default function MainPage() {
         .map(item => ({
           id: item.id,
           type: 'wine_label' as const,
-          extractedData: item.result?.extractedData || {}
+          extractedData: item.result?.extractedData || {},
+          imageUrl: item.url // Include imageUrl for blob cleanup
         }));
 
       const selectedIds = selectedItems.map(item => item.id);
@@ -731,8 +954,8 @@ export default function MainPage() {
         <div className="container mx-auto px-4 py-6 max-w-md">
           {/* Mobile-first header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">🍷 와인 추적기</h1>
-            <p className="text-gray-600">라벨이나 영수증을 촬영해서 와인 정보를 기록하세요</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">🍷 Wine tracker</h1>
+            <p className="text-gray-600">라벨을 촬영해서 와인 정보를 기록하세요</p>
           </div>
 
           {/* Mobile-first single column layout */}

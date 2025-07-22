@@ -39,15 +39,6 @@ export interface CacheConfig {
   };
 }
 
-export interface LoggingConfig {
-  level: string;
-  fileLogging: boolean;
-  consoleLogging: boolean;
-  maxFileSize: number;
-  maxFiles: number;
-  silent: boolean;
-}
-
 export interface UploadConfig {
   uploadDir: string;
   maxFileSize: number;
@@ -69,7 +60,6 @@ export interface AppConfig {
   vision: VisionConfig;
   notion: NotionConfig;
   cache: CacheConfig;
-  logging: LoggingConfig;
   upload: UploadConfig;
   server: {
     port: number;
@@ -184,35 +174,6 @@ export const cacheConfig: Record<Environment, CacheConfig> = {
   }
 };
 
-/**
- * Logging configuration by environment
- */
-export const loggingConfig: Record<Environment, LoggingConfig> = {
-  development: {
-    level: 'debug',
-    fileLogging: true,
-    consoleLogging: true,
-    maxFileSize: 5 * 1024 * 1024, // 5MB
-    maxFiles: 3,
-    silent: false
-  },
-  production: {
-    level: 'info',
-    fileLogging: true,
-    consoleLogging: false,
-    maxFileSize: 10 * 1024 * 1024, // 10MB
-    maxFiles: 5,
-    silent: false
-  },
-  test: {
-    level: 'error',
-    fileLogging: false,
-    consoleLogging: false,
-    maxFileSize: 1 * 1024 * 1024, // 1MB
-    maxFiles: 1,
-    silent: true
-  }
-};
 
 /**
  * Upload configuration by environment
@@ -276,7 +237,6 @@ export function getConfig(): AppConfig {
     vision: visionConfig[env],
     notion: notionConfig[env],
     cache: cacheConfig[env],
-    logging: loggingConfig[env],
     upload: uploadConfig[env],
     server: {
       port: parseInt(process.env.PORT || '3000'),

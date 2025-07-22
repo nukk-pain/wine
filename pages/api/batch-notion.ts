@@ -2,7 +2,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { saveWineToNotion, saveReceiptToNotion } from '@/lib/notion';
 import { normalizeWineData } from '@/lib/data-normalizer';
-import logger from '@/lib/config/logger';
 
 interface WineData {
   wine_name?: string;
@@ -18,6 +17,7 @@ interface BatchNotionItem {
   id: string;
   type: 'wine_label' | 'receipt';
   extractedData: WineData | any;
+  imageUrl?: string; // For Vercel Blob cleanup
 }
 
 interface BatchNotionRequest {
@@ -28,6 +28,7 @@ interface BatchNotionRequest {
 
 interface BatchSaveResult {
   id: string;
+  itemId: string; // Same as id, for consistency
   success: boolean;
   notionResult?: any;
   error?: string;
@@ -65,6 +66,7 @@ async function saveSingleItem(item: BatchNotionItem): Promise<BatchSaveResult> {
 
     return {
       id: item.id,
+      itemId: item.id,
       success: true,
       notionResult
     };
@@ -72,7 +74,7 @@ async function saveSingleItem(item: BatchNotionItem): Promise<BatchSaveResult> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
-    logger.error('Single item save error', { 
+    console.error('Single item save error:', { 
       id: item.id,
       type: item.type,
       error: errorMessage
@@ -80,6 +82,7 @@ async function saveSingleItem(item: BatchNotionItem): Promise<BatchSaveResult> {
 
     return {
       id: item.id,
+      itemId: item.id,
       success: false,
       error: errorMessage
     };
@@ -116,6 +119,7 @@ async function batchSaveItems(
         }
         results.push({
           id: 'unknown',
+          itemId: 'unknown',
           success: false,
           error: result.status === 'rejected' ? 'Promise rejected unexpectedly' : 'Unknown batch save error'
         });
@@ -242,7 +246,52 @@ export default async function handler(
     const savedCount = saveResults.filter(r => r.success).length;
     const failedCount = saveResults.filter(r => !r.success).length;
 
-    logger.info('Batch Notion save completed', {
+    // Cleanup Vercel Blob files for successfully saved items
+    if (savedCount > 0) {
+      try {
+        const successfulItems = saveResults
+          .filter(r => r.success)
+          .map(r => r.itemId);
+        
+        const blobUrls = itemsToSave
+          .filter(item => successfulItems.includes(item.id))
+          .map(item => item.imageUrl)
+          .filter(url => url && url.includes('vercel-storage.com')); // Only Vercel Blob URLs
+        
+        if (blobUrls.length > 0) {
+          console.log(`Starting blob cleanup for ${blobUrls.length} successfully saved items`);
+          
+          // Call cleanup API
+          const cleanupResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/cleanup-blobs`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ urls: blobUrls })
+          });
+          
+          if (cleanupResponse.ok) {
+            const cleanupResult = await cleanupResponse.json();
+            console.log('Blob cleanup completed:', {
+              deletedCount: cleanupResult.deletedCount,
+              failedCount: cleanupResult.failedCount
+            });
+          } else {
+            console.warn('Blob cleanup API call failed:', {
+              status: cleanupResponse.status,
+              statusText: cleanupResponse.statusText
+            });
+          }
+        }
+      } catch (cleanupError) {
+        console.warn('Blob cleanup failed:', {
+          error: cleanupError instanceof Error ? cleanupError.message : 'Unknown cleanup error'
+        });
+        // Don't fail the main operation if cleanup fails
+      }
+    }
+
+    console.log('Batch Notion save completed:', {
       operation: requestBody.operation,
       totalItems: itemsToSave.length,
       savedCount,
@@ -264,7 +313,7 @@ export default async function handler(
     });
 
   } catch (error) {
-    logger.error('Batch Notion save API error', { 
+    console.error('Batch Notion save API error:', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
     });

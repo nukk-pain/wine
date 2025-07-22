@@ -166,13 +166,14 @@ export function mapToNotionProperties(wineData: NotionWineProperties): Record<st
     };
   }
 
-  // Always set Status to '재고' and Quantity to 1
+  // Always set Status to '재고' and Quantity to 1 (override any input values)
   properties[NOTION_PROPERTY_NAMES.STATUS] = {
     select: {
       name: '재고'
     }
   };
 
+  // Force Quantity to always be 1 for wine labels
   properties[NOTION_PROPERTY_NAMES.QUANTITY] = {
     number: 1
   };
