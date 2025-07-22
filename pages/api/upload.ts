@@ -3,6 +3,7 @@ import formidable from 'formidable';
 import fs from 'fs/promises';
 import path from 'path';
 import sharp from 'sharp';
+// @ts-ignore
 import { put } from '@vercel/blob';
 
 // Next.js bodyParser 비활성화 (파일 업로드를 위해)
@@ -118,7 +119,7 @@ async function parseUploadedFile(req: NextApiRequest): Promise<{ file?: any; err
       }
     });
 
-    form.parse(req, (err, fields, files) => {
+    form.parse(req, (err, _fields, files) => {
       if (err) {
         // 특정 에러 메시지 처리
         if (err.code === 'LIMIT_FILE_SIZE') {
