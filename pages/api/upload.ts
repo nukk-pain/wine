@@ -12,7 +12,7 @@ export const config = {
   },
 };
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || '/volume2/web/wine/wine-photos';
+const UPLOAD_DIR = process.env.UPLOAD_DIR || (process.env.NODE_ENV === 'production' ? '/volume2/web/wine/wine-photos' : path.join(process.cwd(), 'public', 'uploads'));
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
