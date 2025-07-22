@@ -341,7 +341,13 @@ export default async function handler(
           type: imageType,
           extractedData: extractedData,
           savedImagePath: savedImagePath
-        }
+        },
+        // Include debug info in development or when requested
+        debug: process.env.NODE_ENV === 'development' || req.query.debug ? {
+          geminiRawData: extractedData,
+          imageType: imageType,
+          processingPath: 'skipNotion=true'
+        } : undefined
       });
     }
 

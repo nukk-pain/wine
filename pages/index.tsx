@@ -252,12 +252,96 @@ export default function MainPage() {
       const successCount = allResults.filter(r => r?.success).length;
       console.log(`🎉 [CLIENT] All batches completed: ${successCount}/${files.length} files successful`);
       
+      // 🚨 CRITICAL FIX: Auto-process uploaded images
+      if (successCount > 0) {
+        console.log(`🔄 [CLIENT] Starting auto-processing for ${successCount} uploaded images...`);
+        await handleBatchAnalyze(updatedItems.filter(item => item.status === 'uploaded'));
+      }
       
     } catch (error) {
       setError(`업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
       console.error('Multiple upload error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Auto-process uploaded images
+  const handleBatchAnalyze = async (items: ImageProcessingItem[]) => {
+    if (items.length === 0) return;
+    
+    console.log(`🔄 [CLIENT] Processing ${items.length} uploaded images...`);
+    
+    // Update status to processing
+    setProcessingItems(prevItems => 
+      prevItems.map(item => 
+        items.find(i => i.id === item.id) 
+          ? { ...item, status: 'processing', progress: 0 }
+          : item
+      )
+    );
+    
+    try {
+      // Use process-multiple API
+      const response = await fetch('/api/process-multiple', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          images: items.map(item => ({
+            id: item.id,
+            url: item.url,
+            type: 'wine_label' // Default to wine_label, let Gemini auto-classify
+          })),
+          useGemini: 'true',
+          skipNotion: 'true' // Skip Notion for now, save manually later
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.results) {
+        console.log(`✅ [CLIENT] Processing completed: ${result.successCount}/${result.totalImages} successful`);
+        
+        // Update items with processing results
+        setProcessingItems(prevItems => 
+          prevItems.map(item => {
+            const processResult = result.results.find((r: any) => r.id === item.id);
+            if (processResult) {
+              return {
+                ...item,
+                status: processResult.success ? 'completed' : 'error',
+                result: processResult.success ? {
+                  extractedData: processResult.extractedData,
+                  type: processResult.type
+                } : undefined,
+                error: processResult.success ? undefined : processResult.error,
+                progress: processResult.success ? 100 : 0
+              };
+            }
+            return item;
+          })
+        );
+      } else {
+        throw new Error(result.error || 'Processing failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ [CLIENT] Batch processing failed:', error);
+      
+      // Update items with error status
+      setProcessingItems(prevItems => 
+        prevItems.map(item => 
+          items.find(i => i.id === item.id) 
+            ? { ...item, status: 'error', error: error instanceof Error ? error.message : 'Processing failed' }
+            : item
+        )
+      );
     }
   };
 
