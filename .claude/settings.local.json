@@ -30,7 +30,8 @@
       "WebFetch(domain:global.download.synology.com)",
       "WebFetch(domain:community.synology.com)",
       "Bash(chmod:*)",
-      "Bash(del C:GitHubwinepagesapiupload-blob.ts)"
+      "Bash(del C:GitHubwinepagesapiupload-blob.ts)",
+      "Bash(npx tsc:*)"
     ],
     "deny": []
   }

@@ -231,6 +231,8 @@ async function saveAndOptimizeFile(file: any) {
     return {
       fileName: safeFileName,
       filePath,
+      fileUrl: `/uploads/${safeFileName}`,
+      url: `/uploads/${safeFileName}`,
       fileSize: stats.size,
       optimized: true
     };
@@ -245,6 +247,8 @@ async function saveAndOptimizeFile(file: any) {
     return {
       fileName: safeFileName,
       filePath,
+      fileUrl: `/uploads/${safeFileName}`,
+      url: `/uploads/${safeFileName}`,
       fileSize: stats.size,
       optimized: false
     };
