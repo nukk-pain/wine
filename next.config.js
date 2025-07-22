@@ -1,23 +1,36 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone', // 독립 실행형 빌드
+  // Remove standalone output for Vercel deployment
+  // Remove NAS-specific rewrites and paths
+  // Environment variables will be handled by Vercel dashboard
+  
+  // Performance optimizations
   experimental: {
-    outputFileTracingRoot: '/volume2/web/wine/wine-tracker',
+    swcMinify: true,
+    esmExternals: true,
   },
-  async rewrites() {
-    return [
-      {
-        source: '/uploads/:path*',
-        destination: '/api/files/:path*' // NAS 파일 서빙
-      }
-    ];
+  
+  // Webpack optimizations for development
+  webpack: (config, { dev }) => {
+    if (dev) {
+      // Optimize watch mode
+      config.watchOptions = {
+        poll: 1000,
+        aggregateTimeout: 300,
+        ignored: /node_modules/
+      };
+      
+      // Reduce bundle analysis overhead
+      config.optimization = {
+        ...config.optimization,
+        removeAvailableModules: false,
+        removeEmptyChunks: false,
+        splitChunks: false,
+      };
+    }
+    
+    return config;
   },
-  env: {
-    UPLOAD_DIR: process.env.UPLOAD_DIR || '/volume2/web/wine/wine-photos',
-    BASE_URL: process.env.NODE_ENV === 'production' 
-      ? 'http://your-nas-ip:3000' 
-      : 'http://localhost:3001'
-  }
 };
 
 module.exports = nextConfig;

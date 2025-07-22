@@ -43,6 +43,7 @@ export function ImageTypeSelector({
           role="radio"
           aria-checked={selected === 'wine_label'}
           type="button"
+          style={{ display: 'none' }}
         >
           <div className="flex items-center justify-center space-x-3">
             <span className="text-2xl">🍷</span>
@@ -50,12 +51,14 @@ export function ImageTypeSelector({
           </div>
         </button>
         
+        {/* Hidden receipt option - functionality preserved */}
         <button
           className={getButtonClassName('receipt', '🧾')}
           onClick={() => handleSelect('receipt')}
           role="radio"
           aria-checked={selected === 'receipt'}
           type="button"
+          style={{ display: 'none' }}
         >
           <div className="flex items-center justify-center space-x-3">
             <span className="text-2xl">🧾</span>
@@ -63,12 +66,14 @@ export function ImageTypeSelector({
           </div>
         </button>
         
+        {/* Hidden auto detection option - functionality preserved */}
         <button
           className={getButtonClassName('auto', '🤖')}
           onClick={() => handleSelect('auto')}
           role="radio"
           aria-checked={selected === 'auto'}
           type="button"
+          style={{ display: 'none' }}
         >
           <div className="flex items-center justify-center space-x-3">
             <span className="text-2xl">🤖</span>

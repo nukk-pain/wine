@@ -13,6 +13,7 @@ const customJestConfig = {
     '^@/pages/(.*)$': '<rootDir>/pages/$1',
     '^@/lib/(.*)$': '<rootDir>/lib/$1',
     '^@google/genai$': '<rootDir>/__mocks__/@google/genai.js',
+    '^@vercel/blob$': '<rootDir>/__mocks__/@vercel/blob.js',
   },
   testEnvironment: 'jest-environment-jsdom',
   // Handle ES modules from @google/genai

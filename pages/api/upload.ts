@@ -3,6 +3,8 @@ import formidable from 'formidable';
 import fs from 'fs/promises';
 import path from 'path';
 import sharp from 'sharp';
+// @ts-ignore
+import { put } from '@vercel/blob';
 
 // Next.js bodyParser 비활성화 (파일 업로드를 위해)
 export const config = {
@@ -11,7 +13,11 @@ export const config = {
   },
 };
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || '/volume2/web/wine/wine-photos';
+// Vercel 환경에서는 /tmp 사용, 로컬에서는 public/uploads 사용
+const UPLOAD_DIR = process.env.UPLOAD_DIR || 
+  (process.env.VERCEL_ENV ? '/tmp' : 
+    (process.env.NODE_ENV === 'production' ? '/volume2/web/wine/wine-photos' : 
+      path.join(process.cwd(), 'public', 'uploads')));
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
@@ -40,15 +46,35 @@ export default async function handler(
     }
 
     // 파일 저장 및 최적화
-    const savedFile = await saveAndOptimizeFile(file);
+    let savedFile;
+    
+    // Vercel 환경 체크 - VERCEL_ENV 또는 BLOB_READ_WRITE_TOKEN 존재 여부로 확인
+    const isVercel = process.env.VERCEL_ENV || process.env.BLOB_READ_WRITE_TOKEN;
+    
+    if (isVercel) {
+      console.log('Using Vercel Blob for file upload');
+      try {
+        savedFile = await saveToVercelBlob(file);
+      } catch (blobError: any) {
+        console.error('Vercel Blob upload failed:', blobError);
+        // Fallback to local storage if Blob fails
+        console.log('Falling back to local storage');
+        savedFile = await saveAndOptimizeFile(file);
+      }
+    } else {
+      // Use local file system in other environments
+      savedFile = await saveAndOptimizeFile(file);
+    }
 
     res.json({
       success: true,
       fileName: savedFile.fileName,
       filePath: savedFile.filePath,
-      fileUrl: `/uploads/${savedFile.fileName}`,
+      fileUrl: savedFile.fileUrl || `/uploads/${savedFile.fileName}`,
       fileSize: savedFile.fileSize,
-      optimized: savedFile.optimized
+      optimized: savedFile.optimized,
+      // Add URL for Vercel Blob compatibility
+      url: savedFile.url || savedFile.fileUrl || `/uploads/${savedFile.fileName}`
     });
 
   } catch (error: any) {
@@ -66,12 +92,25 @@ async function ensureUploadDir() {
   } catch {
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
   }
+  
+  // 개발 환경에서 임시 디렉토리도 확인
+  if (!process.env.VERCEL) {
+    const tempDir = path.join(process.cwd(), 'tmp');
+    try {
+      await fs.access(tempDir);
+    } catch {
+      await fs.mkdir(tempDir, { recursive: true });
+    }
+  }
 }
 
 async function parseUploadedFile(req: NextApiRequest): Promise<{ file?: any; error?: string }> {
   return new Promise((resolve) => {
+    // Vercel 환경에서는 /tmp 사용, 로컬에서는 ./tmp 사용
+    const tempDir = process.env.VERCEL_ENV ? '/tmp' : path.join(process.cwd(), 'tmp');
+    
     const form = formidable({
-      uploadDir: UPLOAD_DIR,
+      uploadDir: tempDir,
       keepExtensions: true,
       maxFileSize: MAX_FILE_SIZE,
       filter: ({ mimetype }) => {
@@ -80,7 +119,7 @@ async function parseUploadedFile(req: NextApiRequest): Promise<{ file?: any; err
       }
     });
 
-    form.parse(req, (err, fields, files) => {
+    form.parse(req, (err, _fields, files) => {
       if (err) {
         // 특정 에러 메시지 처리
         if (err.code === 'LIMIT_FILE_SIZE') {
@@ -153,6 +192,55 @@ function validateFile(file: any) {
   return { valid: true };
 }
 
+async function saveToVercelBlob(file: any) {
+  try {
+    // Check if Blob token exists
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      throw new Error('BLOB_READ_WRITE_TOKEN is not configured');
+    }
+    
+    // Read file data
+    const fileData = await fs.readFile(file.filepath);
+    
+    // Generate a unique filename
+    const timestamp = Date.now();
+    const originalExt = path.extname(file.originalFilename || 'image.jpg');
+    const fileName = `wine_${timestamp}${originalExt}`;
+    
+    console.log(`Uploading to Vercel Blob: ${fileName}, size: ${fileData.length} bytes`);
+    
+    // Upload to Vercel Blob
+    const blob = await put(fileName, fileData, {
+      access: 'public',
+      contentType: file.mimetype || 'image/jpeg',
+    });
+    
+    console.log(`Vercel Blob upload successful: ${blob.url}`);
+    
+    // Clean up temp file
+    await fs.unlink(file.filepath).catch(err => 
+      console.warn('Failed to delete temp file:', err)
+    );
+    
+    return {
+      fileName: fileName,
+      filePath: blob.url,
+      fileUrl: blob.url,
+      url: blob.url,
+      fileSize: file.size,
+      optimized: true
+    };
+  } catch (error: any) {
+    console.error('Vercel Blob upload error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+    });
+    throw error;
+  }
+}
+
 async function saveAndOptimizeFile(file: any) {
   const timestamp = Date.now();
   const originalExt = path.extname(file.originalFilename || 'image.jpg');
@@ -187,6 +275,8 @@ async function saveAndOptimizeFile(file: any) {
     return {
       fileName: safeFileName,
       filePath,
+      fileUrl: `/uploads/${safeFileName}`,
+      url: `/uploads/${safeFileName}`,
       fileSize: stats.size,
       optimized: true
     };
@@ -201,6 +291,8 @@ async function saveAndOptimizeFile(file: any) {
     return {
       fileName: safeFileName,
       filePath,
+      fileUrl: `/uploads/${safeFileName}`,
+      url: `/uploads/${safeFileName}`,
       fileSize: stats.size,
       optimized: false
     };

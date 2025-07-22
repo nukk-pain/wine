@@ -234,17 +234,17 @@ export const uploadConfig: Record<Environment, UploadConfig> = {
     }
   },
   production: {
-    uploadDir: process.env.UPLOAD_DIR || '/volume2/web/wine/wine-photos',
+    uploadDir: process.env.UPLOAD_DIR || '/tmp/uploads',
     maxFileSize: 50 * 1024 * 1024, // 50MB for production
     allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
     imageStorage: {
       nas: {
-        enabled: true,
-        path: '/volume2/web/wine/wine-photos'
-      },
-      local: {
         enabled: false,
         path: ''
+      },
+      local: {
+        enabled: true,
+        path: '/tmp/uploads'
       }
     }
   },
@@ -294,11 +294,12 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
 
   // Vision API validation
   if (config.vision.enabled && config.environment !== 'test') {
-    if (!config.vision.projectId) {
-      errors.push('Vision API project ID is required for non-test environments');
-    }
-    
-    if (config.vision.keyFilename && !fs.existsSync(config.vision.keyFilename)) {
+    // In Vercel, we check for credentials string instead of file
+    if (process.env.VERCEL) {
+      if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        errors.push('GOOGLE_APPLICATION_CREDENTIALS environment variable is required for Vercel deployment');
+      }
+    } else if (config.vision.keyFilename && !fs.existsSync(config.vision.keyFilename)) {
       errors.push(`Vision API credentials file not found: ${config.vision.keyFilename}`);
     }
   }
@@ -314,10 +315,12 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
     }
   }
 
-  // Upload directory validation
-  const uploadParent = path.dirname(config.upload.uploadDir);
-  if (!fs.existsSync(uploadParent)) {
-    errors.push(`Upload directory parent does not exist: ${uploadParent}`);
+  // Upload directory validation - skip for Vercel
+  if (!process.env.VERCEL) {
+    const uploadParent = path.dirname(config.upload.uploadDir);
+    if (!fs.existsSync(uploadParent)) {
+      errors.push(`Upload directory parent does not exist: ${uploadParent}`);
+    }
   }
 
   // Server configuration validation
@@ -380,6 +383,52 @@ export function getServiceTimeout(service: 'vision' | 'notion'): number {
     default:
       return 30000; // Default 30 seconds
   }
+}
+
+/**
+ * Get Notion configuration for current environment
+ */
+export function getNotionConfig(): NotionConfig & { credentials?: string } {
+  const env = getEnvironment();
+  const config = notionConfig[env];
+  
+  // For Vercel deployment, ensure we use process.env directly
+  if (process.env.VERCEL) {
+    return {
+      ...config,
+      apiKey: process.env.NOTION_API_KEY || config.apiKey,
+      databaseId: process.env.NOTION_DATABASE_ID || config.databaseId,
+    };
+  }
+  
+  return config;
+}
+
+/**
+ * Get Vision configuration for current environment
+ */
+export function getVisionConfig(): VisionConfig & { credentials?: string } {
+  const env = getEnvironment();
+  const config = visionConfig[env];
+  
+  // For Vercel deployment, handle Google credentials as JSON string
+  if (process.env.VERCEL) {
+    return {
+      ...config,
+      credentials: process.env.GOOGLE_APPLICATION_CREDENTIALS || '',
+      keyFilename: undefined, // Don't use file path in Vercel
+    };
+  }
+  
+  // In non-Vercel environments, try to read from file or use env var
+  const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS || 
+    (config.keyFilename && fs.existsSync(config.keyFilename) ? 
+      fs.readFileSync(config.keyFilename, 'utf8') : undefined);
+  
+  return {
+    ...config,
+    credentials,
+  };
 }
 
 // Export the current config as default

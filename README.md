@@ -2,303 +2,309 @@
 
 AI 기반 와인 라벨 및 영수증 인식을 통한 모바일 우선 와인 관리 시스템
 
-## 📱 주요 기능
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyour-username%2Fwine-tracker)
 
-- **모바일 최적화**: 터치 친화적 UI로 모바일에서 완벽한 사용 경험
-- **AI 이미지 분석**: Google Gemini 2.5 Flash를 활용한 와인 정보 자동 추출
-- **카메라 직접 촬영**: 모바일 카메라로 와인 라벨 또는 영수증 직접 촬영
-- **Notion 자동 저장**: 추출된 정보를 Notion 데이터베이스에 자동 저장
-- **데이터 확인 및 수정**: 저장 전 정보 확인 및 편집 가능
+## 🌟 주요 기능
 
-## 🏠 Synology NAS 배포 가이드
+- **📱 모바일 최적화**: 터치 친화적 UI로 모바일에서 완벽한 사용 경험
+- **🤖 AI 이미지 분석**: Google Gemini & Vision API를 활용한 와인 정보 자동 추출
+- **📷 카메라 직접 촬영**: 모바일 카메라로 와인 라벨 또는 영수증 직접 촬영
+- **💾 Notion 자동 저장**: 추출된 정보를 Notion 데이터베이스에 자동 저장
+- **✅ 데이터 확인 및 수정**: 저장 전 정보 확인 및 편집 가능
+- **☁️ 서버리스 아키텍처**: Vercel의 안정적이고 확장 가능한 인프라
 
-### 사전 요구사항
+## 🚀 빠른 시작 (Vercel 배포)
 
-- Synology NAS (DSM 7.0 이상)
-- Node.js 18 이상
-- Git
-- SSH 접근 권한
+### 1. Vercel에 배포
 
-### 1. NAS 환경 준비
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyour-username%2Fwine-tracker)
 
-#### Node.js 설치
+또는 수동으로:
+
 ```bash
-# Synology Package Center에서 Node.js 설치
-# 또는 SSH로 직접 설치
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-```
-
-#### PM2 설치 (프로세스 관리)
-```bash
-sudo npm install -g pm2
-```
-
-### 2. 프로젝트 배포
-
-#### 소스 코드 클론
-```bash
-# NAS의 웹 디렉토리로 이동
-cd /volume2/web
-
 # 프로젝트 클론
-git clone <repository-url> wine
-cd wine
+git clone https://github.com/your-username/wine-tracker.git
+cd wine-tracker
+
+# Vercel CLI 설치 및 배포
+npm install -g vercel
+vercel
 ```
 
-#### 의존성 설치 및 빌드
-```bash
-# 의존성 설치
-npm install
+### 2. 환경 변수 설정
 
-# 프로덕션 빌드
-npm run build
-```
+Vercel 대시보드에서 다음 환경 변수를 설정하세요:
 
-### 3. 환경 변수 설정
+| 환경 변수 | 설명 | 필수 |
+|----------|------|------|
+| `NOTION_API_KEY` | Notion Integration API 키 | ✅ |
+| `NOTION_DATABASE_ID` | Notion 데이터베이스 ID | ✅ |
+| `GEMINI_API_KEY` | Google Gemini API 키 | ✅ |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Google Vision API 서비스 계정 JSON (전체 내용) | ✅ |
 
-#### .env.local 파일 생성
-```bash
-# 환경 파일 생성
-touch .env.local
-nano .env.local
-```
+## ⚙️ API 설정 가이드
 
-#### 필수 환경 변수
-```env
-# Google APIs
-GOOGLE_APPLICATION_CREDENTIALS="/volume2/web/wine/vision.json"
-GEMINI_API_KEY="your-gemini-api-key-here"
+### Google APIs 설정
 
-# Notion API
-NOTION_API_KEY="your-notion-api-key-here"
-NOTION_DATABASE_ID="your-notion-database-id-here"
-
-# 환경 설정
-NODE_ENV="production"
-PORT=5959
-```
-
-### 4. Google API 설정
-
-#### Google Vision API 설정
+#### 1. Google Vision API
 1. [Google Cloud Console](https://console.cloud.google.com/)에서 프로젝트 생성
 2. Vision API 활성화
-3. 서비스 계정 키 생성 (JSON 파일)
-4. `vision.json` 파일로 저장
+3. 서비스 계정 생성 및 JSON 키 다운로드
+4. **중요**: Vercel에서는 파일 경로가 아닌 JSON 내용 전체를 환경 변수로 설정
 
-```bash
-# 서비스 계정 키 파일 업로드
-scp path/to/your/vision.json user@nas-ip:/volume2/web/wine/
+```json
+{
+  "type": "service_account",
+  "project_id": "your-project-id",
+  "private_key_id": "key-id",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+  ...
+}
 ```
 
-#### Google Gemini API 설정
+#### 2. Google Gemini API
 1. [Google AI Studio](https://aistudio.google.com/)에서 API 키 생성
-2. `.env.local`에 `GEMINI_API_KEY` 추가
+2. Vercel 환경 변수에 `GEMINI_API_KEY` 설정
 
-### 5. Notion 데이터베이스 설정
+### Notion 설정
 
-#### Notion Integration 생성
+#### 1. Integration 생성
 1. [Notion Developers](https://developers.notion.com/)에서 새 Integration 생성
-2. API 키 복사하여 `.env.local`에 추가
+2. API 키 복사하여 Vercel 환경 변수에 설정
 
-#### 데이터베이스 구조
+#### 2. 데이터베이스 생성
 다음 속성을 가진 Notion 데이터베이스 생성:
 
 | 속성명 | 타입 | 설명 |
 |--------|------|------|
-| Name | Title | 와인 이름 |
-| Vintage | Number | 빈티지 년도 |
-| Region/Producer | Text | 지역/생산자 |
-| Varietal(품종) | Multi-select | 포도 품종 |
-| Price | Number | 가격 |
-| Quantity | Number | 수량 |
-| Purchase date | Date | 구매일자 |
-| Store | Text | 구매처 |
-| Status | Select | 상태 (재고, 소비됨 등) |
+| `Name` | Title | 와인 이름 |
+| `Vintage` | Number | 빈티지 년도 |
+| `Region/Producer` | Rich text | 지역/생산자 |
+| `Varietal(품종)` | Rich text | 포도 품종 |
+| `Price` | Number | 가격 |
+| `Quantity` | Number | 수량 |
+| `Purchase date` | Date | 구매일자 |
+| `Store` | Rich text | 구매처 |
+| `Status` | Select | 상태 (재고, 소비됨) |
+| `Image` | Files | 와인 사진 |
 
-### 6. PM2로 프로덕션 실행
+#### 3. 데이터베이스 권한 설정
+- 생성된 데이터베이스에서 Integration에 권한 부여
+- 데이터베이스 ID를 복사하여 Vercel 환경 변수에 설정
 
-#### PM2 설정 파일 (ecosystem.config.js)
-```javascript
-module.exports = {
-  apps: [{
-    name: 'wine-tracker',
-    script: 'npm',
-    args: 'start',
-    cwd: '/volume2/web/wine',
-    env: {
-      NODE_ENV: 'production',
-      PORT: 5959
-    },
-    instances: 1,
-    autorestart: true,
-    watch: false,
-    max_memory_restart: '1G',
-    log_file: '/volume2/web/wine/logs/combined.log',
-    out_file: '/volume2/web/wine/logs/out.log',
-    error_file: '/volume2/web/wine/logs/error.log',
-    time: true
-  }]
-};
+## 💻 로컬 개발
+
+### 사전 요구사항
+- Node.js 18 이상
+- npm 또는 yarn
+
+### 개발 환경 설정
+
+```bash  
+# 의존성 설치
+npm install
+
+# 환경 변수 파일 생성
+cp .env.example .env
+
+# 개발 서버 시작
+npm run dev
 ```
 
-#### PM2 실행
-```bash
-# PM2로 애플리케이션 시작
-pm2 start ecosystem.config.js
+### 환경 변수 (.env)
 
-# PM2 자동 시작 설정
-pm2 startup
-pm2 save
+```env
+# Google APIs
+GEMINI_API_KEY=your-gemini-api-key
+GOOGLE_APPLICATION_CREDENTIALS={"type":"service_account",...}
 
-# 상태 확인
-pm2 status
-pm2 logs wine-tracker
+# Notion API
+NOTION_API_KEY=your-notion-api-key
+NOTION_DATABASE_ID=your-database-id
 ```
 
-### 7. 리버스 프록시 설정 (선택사항)
+### 개발 명령어
 
-#### Nginx 설정
-```nginx
-server {
-    listen 80;
-    server_name your-nas-domain.com;
-
-    location / {
-        proxy_pass http://localhost:5959;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-## 🔧 개발 환경 설정
-
-### 로컬 개발
 ```bash
 # 개발 서버 시작
 npm run dev
 
-# 테스트 실행
-npm test
+# 빌드
+npm run build
 
 # 타입 체크
 npm run type-check
+
+# 테스트 실행
+npm test
+
+# E2E 테스트
+npm run test:e2e
+
+# Lint
+npm run lint
 ```
 
-### 환경별 설정
-- **개발**: `http://localhost:3001`
-- **프로덕션**: `http://your-nas-ip:5959`
-- **이미지 저장**: 
-  - 개발: `public/wine-photos/`
-  - 프로덕션: `/volume2/web/wine/wine-photos/`
+## 🏗️ 아키텍처
 
-## 📋 사용 방법
+### 기술 스택
+- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes (서버리스)
+- **Storage**: Vercel Blob (이미지 저장)
+- **AI/ML**: Google Vision API, Google Gemini
+- **Database**: Notion API
+- **Deployment**: Vercel (자동 CI/CD)
+- **Testing**: Jest, React Testing Library, Playwright
 
-1. **📷 이미지 촬영**: 모바일에서 와인 라벨 또는 영수증 촬영
-2. **🎯 타입 선택**: 와인 라벨, 영수증, 또는 AI 자동 감지 선택
-3. **🚀 분석 실행**: "분석하기" 버튼으로 AI 분석 시작
-4. **✅ 정보 확인**: 추출된 정보 확인 및 필요시 수정
-5. **💾 Notion 저장**: 최종 확인 후 Notion 데이터베이스에 저장
+### 디렉토리 구조
+```
+wine-tracker/
+├── __tests__/               # 테스트 파일
+│   ├── unit/               # 단위 테스트
+│   ├── integration/        # 통합 테스트
+│   └── e2e/               # E2E 테스트
+├── components/             # React 컴포넌트
+├── lib/                   # 유틸리티 및 설정
+│   ├── config/            # 환경별 설정
+│   ├── parsers/           # AI 응답 파서
+│   └── ...
+├── pages/                 # Next.js 페이지
+│   └── api/              # API 라우트
+├── public/               # 정적 파일
+└── styles/               # 스타일 파일
+```
+
+### 데이터 플로우
+1. **이미지 업로드** → Vercel Blob 저장
+2. **AI 분석** → Google Vision/Gemini API 호출
+3. **데이터 파싱** → 구조화된 와인 정보 추출
+4. **사용자 확인** → 편집 가능한 인터페이스 제공
+5. **Notion 저장** → 최종 데이터베이스 저장
+
+## 📱 사용 방법
+
+1. **📷 이미지 업로드**: 
+   - 모바일에서 카메라 아이콘 터치
+   - 와인 라벨 또는 영수증 촬영
+
+2. **🎯 타입 선택**: 
+   - 와인 라벨, 영수증 선택
+   - 또는 AI 자동 감지 사용
+
+3. **🤖 AI 분석**: 
+   - "분석하기" 버튼으로 AI 분석 시작
+   - Google Vision + Gemini가 정보 추출
+
+4. **✅ 정보 확인**: 
+   - 추출된 정보 검토
+   - 필요시 직접 편집
+
+5. **💾 저장**: 
+   - Notion 데이터베이스에 자동 저장
+   - 저장 완료 확인
 
 ## 🔧 트러블슈팅
 
-### 일반적인 문제 해결
+### 일반적인 문제
 
-#### 1. PM2 프로세스가 시작되지 않을 때
-```bash
-# 로그 확인
-pm2 logs wine-tracker
-
-# 프로세스 재시작
-pm2 restart wine-tracker
-
-# 프로세스 삭제 후 재시작
-pm2 delete wine-tracker
-pm2 start ecosystem.config.js
-```
+#### 1. Vercel 배포 실패
+- 환경 변수가 올바르게 설정되었는지 확인
+- 빌드 로그에서 오류 메시지 확인
+- `vercel logs` 명령어로 런타임 로그 확인
 
 #### 2. Google API 오류
 ```bash
-# 환경 변수 확인
-echo $GOOGLE_APPLICATION_CREDENTIALS
-cat /volume2/web/wine/.env.local
+# Vision API 권한 확인
+# Vercel 대시보드에서 GOOGLE_APPLICATION_CREDENTIALS 확인
 
-# vision.json 파일 권한 확인
-ls -la vision.json
-chmod 600 vision.json
+# Gemini API 할당량 확인
+# Google AI Studio에서 사용량 모니터링
 ```
 
-#### 3. Notion API 연결 오류
-- Notion Integration이 데이터베이스에 권한이 있는지 확인
-- API 키가 올바른지 확인
-- 데이터베이스 ID가 정확한지 확인
+#### 3. Notion 연결 오류
+- Integration이 데이터베이스에 권한이 있는지 확인
+- 데이터베이스 스키마가 일치하는지 확인
+- API 키가 유효한지 확인
 
-#### 4. 포트 충돌
+#### 4. 이미지 업로드 실패
+- Vercel Blob 할당량 확인
+- 파일 크기 제한 (10MB) 확인
+- 지원되는 이미지 형식 확인 (JPEG, PNG, WebP)
+
+### 디버깅
+
+#### 로그 확인
 ```bash
-# 포트 사용 확인
-netstat -tulpn | grep :5959
+# Vercel 함수 로그
+vercel logs
 
-# 다른 포트로 변경
-# .env.local에서 PORT=5960으로 변경
+# 로컬 개발 로그
+npm run dev
 ```
 
-### 로그 확인
+#### 테스트 실행
 ```bash
-# 애플리케이션 로그
-tail -f /volume2/web/wine/logs/combined.log
+# 전체 테스트
+npm test
 
-# PM2 로그
-pm2 logs wine-tracker --lines 100
+# 특정 테스트
+npm test -- integration
 
-# 시스템 로그
-journalctl -u pm2-root -f
+# 커버리지 리포트
+npm test -- --coverage
 ```
 
 ## 🔒 보안 고려사항
 
-- `.env.local` 파일 권한: `600` (소유자만 읽기/쓰기)
-- `vision.json` 파일 권한: `600`
-- 방화벽에서 필요한 포트만 개방
-- 정기적인 보안 업데이트
+- **환경 변수**: 민감한 정보는 Vercel 환경 변수에만 저장
+- **API 키 관리**: Google Cloud에서 API 키 제한 설정
+- **Rate Limiting**: API 호출 제한으로 비용 관리
+- **CORS**: 허용된 도메인에서만 접근 가능
+- **File Validation**: 업로드 파일 타입 및 크기 검증
 
-## 📱 모바일 최적화 기능
+## 📊 모니터링
 
-- **터치 친화적 UI**: 최소 44px 터치 타겟
-- **카메라 직접 접근**: `capture="environment"` 속성으로 후면 카메라 사용
-- **반응형 디자인**: 모바일 우선 설계
-- **PWA 지원**: 모바일 앱과 같은 사용 경험
+### Vercel Analytics
+- 페이지 방문 및 성능 지표
+- API 호출 횟수 및 응답 시간
+- 에러율 모니터링
 
-## 🔄 업데이트 방법
+### Cost Management
+- Google API 사용량 모니터링
+- Vercel 함수 실행 시간 최적화
+- Blob 저장소 사용량 관리
+
+## 🔄 업데이트
 
 ```bash
-# 소스 코드 업데이트
-cd /volume2/web/wine
-git pull origin main
+# 로컬 변경사항 배포
+git add .
+git commit -m "Update features"
+git push origin main
 
-# 의존성 업데이트
-npm install
-
-# 빌드
-npm run build
-
-# PM2 재시작
-pm2 restart wine-tracker
+# Vercel이 자동으로 배포 수행
 ```
 
-## 📞 지원
+## 🤝 기여하기
 
-- 문제 발생 시 로그 파일과 함께 이슈 제기
-- 모바일 최적화 관련 문의 환영
-- NAS 배포 관련 질문 지원
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 라이선스
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 감사
+
+- [Google Cloud Vision API](https://cloud.google.com/vision)
+- [Google Gemini](https://deepmind.google/technologies/gemini/)
+- [Notion API](https://developers.notion.com/)
+- [Vercel](https://vercel.com/)
+- [Next.js](https://nextjs.org/)
 
 ---
 
-**🍷 Happy Wine Tracking! 🍷**
+**🍷 Happy Wine Tracking on Vercel! 🚀**

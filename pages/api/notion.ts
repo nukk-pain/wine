@@ -1,17 +1,16 @@
 // pages/api/notion.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { saveWineToNotion, saveReceiptToNotion, updateWineRecord, WineData, ReceiptData } from '@/lib/notion';
+import { saveWineToNotion, saveReceiptToNotion, updateWineRecord, WineData, ReceiptData, saveWineToNotionV2 } from '@/lib/notion';
 import { WineInfo, ReceiptInfo } from '@/lib/gemini';
+import { NotionWineProperties, validateWineData } from '@/lib/notion-schema';
 
 // Convert Gemini WineInfo to Notion WineData format
 function convertWineInfoToWineData(wineInfo: WineInfo): WineData {
   return {
-    name: wineInfo.name,
-    vintage: wineInfo.vintage,
-    'Region/Producer': wineInfo.region && wineInfo.producer 
-      ? `${wineInfo.region} / ${wineInfo.producer}`
-      : wineInfo.region || wineInfo.producer || undefined,
-    'Varietal(품종)': wineInfo.grape_variety,
+    name: wineInfo.Name,
+    vintage: wineInfo.Vintage || undefined,
+    'Region/Producer': wineInfo['Region/Producer'] || undefined,
+    'Varietal(품종)': wineInfo['Varietal(품종)'] ? wineInfo['Varietal(품종)'].join(', ') : undefined,
     // Default values - these will be set by the API
     'Purchase date': undefined, // Will be set to current date
     Status: undefined // Will be set to "재고"
@@ -57,6 +56,27 @@ export default async function handler(
     let result;
 
     switch (action) {
+      case 'save_wine_v2':
+        // New API for NotionWineProperties
+        if (!data) {
+          return res.status(400).json({
+            success: false,
+            error: 'Missing required wine data'
+          });
+        }
+
+        const validation = validateWineData(data as NotionWineProperties);
+        if (!validation.isValid) {
+          return res.status(400).json({ 
+            success: false,
+            error: 'Invalid wine data', 
+            details: validation.errors 
+          });
+        }
+
+        result = await saveWineToNotionV2(data as NotionWineProperties);
+        break;
+
       case 'save_wine':
         if (!data) {
           return res.status(400).json({
@@ -67,8 +87,8 @@ export default async function handler(
         
         // Convert Gemini format to Notion format if needed
         let wineData: WineData;
-        if (data.producer && data.grape_variety) {
-          // This looks like Gemini WineInfo format
+        if (data.Name || data['Region/Producer'] || data['Varietal(품종)']) {
+          // This looks like Gemini WineInfo format (new schema)
           wineData = convertWineInfoToWineData(data as WineInfo);
         } else {
           // Already in WineData format or similar

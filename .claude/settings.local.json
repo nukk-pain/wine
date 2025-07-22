@@ -29,7 +29,15 @@
       "Bash(git add:*)",
       "WebFetch(domain:global.download.synology.com)",
       "WebFetch(domain:community.synology.com)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(del C:GitHubwinepagesapiupload-blob.ts)",
+      "Bash(npx tsc:*)",
+      "Bash(git commit:*)",
+      "Bash(npm:*)",
+      "Bash(./node_modules/.bin/next:*)",
+      "Bash(find:*)",
+      "Bash(time npm run type-check)",
+      "Bash(timeout 20s time npm run dev)"
     ],
     "deny": []
   }

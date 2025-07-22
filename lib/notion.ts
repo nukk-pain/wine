@@ -1,5 +1,6 @@
 // lib/notion.ts
 import { Client } from '@notionhq/client';
+import { NotionWineProperties, mapToNotionProperties, validateWineData } from './notion-schema';
 
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
@@ -7,6 +8,7 @@ const notion = new Client({
 
 const DATABASE_ID = process.env.NOTION_DATABASE_ID || '23638693-94a5-804f-aa3d-f64f826a2eab';
 
+// Legacy interface for backwards compatibility
 export interface WineData {
   name: string;
   vintage?: number;
@@ -31,88 +33,21 @@ export interface ReceiptData {
   total: number;
 }
 
-export async function saveWineToNotion(wineData: WineData, source: 'wine_label' | 'receipt') {
-  // Create properties object for Notion API
-  const properties: any = {
-    Name: {
-      title: [
-        {
-          text: {
-            content: wineData.name
-          }
-        }
-      ]
-    }
-  };
-
-  // Add optional properties if they exist
-  if (wineData.vintage) {
-    properties.Vintage = {
-      number: wineData.vintage
-    };
+// New function using NotionWineProperties schema
+export async function saveWineToNotionV2(wineData: NotionWineProperties): Promise<{
+  id: string;
+  url: string;
+}> {
+  // Validate data before saving
+  const validation = validateWineData(wineData);
+  if (!validation.isValid) {
+    throw new Error(`Invalid wine data: ${validation.errors.join(', ')}`);
   }
 
-  if (wineData['Region/Producer']) {
-    properties['Region/Producer'] = {
-      rich_text: [
-        {
-          text: {
-            content: wineData['Region/Producer']
-          }
-        }
-      ]
-    };
-  }
+  // Map to Notion properties format
+  const properties = mapToNotionProperties(wineData);
 
-  if (wineData['Varietal(품종)']) {
-    // Convert varietal to multi_select format
-    const varietals = wineData['Varietal(품종)'].split(',').map(v => v.trim());
-    properties['Varietal(품종)'] = {
-      multi_select: varietals.map(varietal => ({
-        name: varietal
-      }))
-    };
-  }
-
-  if (wineData.price) {
-    properties.Price = {
-      number: wineData.price
-    };
-  }
-
-  if (wineData.quantity) {
-    properties.Quantity = {
-      number: wineData.quantity
-    };
-  }
-
-  if (wineData['Purchase date']) {
-    properties['Purchase date'] = {
-      date: {
-        start: wineData['Purchase date']
-      }
-    };
-  }
-
-  if (wineData.Store) {
-    properties.Store = {
-      rich_text: [
-        {
-          text: {
-            content: wineData.Store
-          }
-        }
-      ]
-    };
-  }
-
-  if (wineData.Status) {
-    properties.Status = {
-      select: {
-        name: wineData.Status
-      }
-    };
-  }
+  console.log('Saving to Notion with properties:', JSON.stringify(properties, null, 2));
 
   const response = await notion.pages.create({
     parent: {
@@ -125,6 +60,23 @@ export async function saveWineToNotion(wineData: WineData, source: 'wine_label' 
     id: response.id,
     url: `https://notion.so/${response.id.replace(/-/g, '')}`
   };
+}
+
+// Legacy function - maintained for backwards compatibility
+export async function saveWineToNotion(wineData: WineData, source: 'wine_label' | 'receipt') {
+  // Convert legacy WineData to NotionWineProperties
+  const notionData: NotionWineProperties = {
+    'Name': wineData.name,
+    'Vintage': wineData.vintage || null,
+    'Region/Producer': wineData['Region/Producer'] || '',
+    'Price': wineData.price || null,
+    'Quantity': wineData.quantity || null,
+    'Store': wineData.Store || '',
+    'Varietal(품종)': wineData['Varietal(품종)'] ? wineData['Varietal(품종)'].split(',').map(v => v.trim()) : [],
+    'Image': null
+  };
+
+  return saveWineToNotionV2(notionData);
 }
 
 export async function saveReceiptToNotion(receiptData: ReceiptData) {

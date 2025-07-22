@@ -10,24 +10,32 @@ describe('Environment Setup Validation', () => {
       expect(process.env.GOOGLE_APPLICATION_CREDENTIALS).not.toBe('');
     });
 
-    it('should have accessible and valid credentials file', () => {
+    it('should have accessible and valid credentials file or JSON string', () => {
       const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
       
       if (!credentialsPath) {
         throw new Error('GOOGLE_APPLICATION_CREDENTIALS not set');
       }
 
-      // 파일 존재 확인
-      expect(fs.existsSync(credentialsPath)).toBe(true);
+      let credentials;
       
-      // 파일 읽기 권한 확인
-      expect(() => fs.accessSync(credentialsPath, fs.constants.R_OK)).not.toThrow();
-      
-      // JSON 형식 확인
-      const credentialsContent = fs.readFileSync(credentialsPath, 'utf8');
-      expect(() => JSON.parse(credentialsContent)).not.toThrow();
-      
-      const credentials = JSON.parse(credentialsContent);
+      // Check if it's a file path or JSON string
+      if (credentialsPath.startsWith('{')) {
+        // JSON string format (for Vercel deployment) - may be multiline
+        try {
+          credentials = JSON.parse(credentialsPath);
+        } catch (error) {
+          throw new Error(`Invalid JSON in GOOGLE_APPLICATION_CREDENTIALS: ${error}`);
+        }
+      } else {
+        // File path format (for local development)
+        expect(fs.existsSync(credentialsPath)).toBe(true);
+        expect(() => fs.accessSync(credentialsPath, fs.constants.R_OK)).not.toThrow();
+        
+        const credentialsContent = fs.readFileSync(credentialsPath, 'utf8');
+        expect(() => JSON.parse(credentialsContent)).not.toThrow();
+        credentials = JSON.parse(credentialsContent);
+      }
       
       // 필수 필드 확인
       expect(credentials.type).toBe('service_account');
@@ -50,14 +58,31 @@ describe('Environment Setup Validation', () => {
     it('should validate project ID configuration', () => {
       const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
       
-      if (credentialsPath && fs.existsSync(credentialsPath)) {
-        const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
-        
-        // 프로젝트 ID 형식 검증
-        expect(credentials.project_id).toMatch(/^[a-z][a-z0-9\-]*[a-z0-9]$/);
-        expect(credentials.project_id.length).toBeGreaterThan(5);
-        expect(credentials.project_id.length).toBeLessThan(31);
+      if (!credentialsPath) {
+        return; // Skip if no credentials are set
       }
+
+      let credentials;
+      
+      // Check if it's a file path or JSON string
+      if (credentialsPath.startsWith('{')) {
+        // JSON string format (for Vercel deployment) - may be multiline
+        try {
+          credentials = JSON.parse(credentialsPath);
+        } catch (error) {
+          return; // Skip if JSON is invalid
+        }
+      } else if (fs.existsSync(credentialsPath)) {
+        // File path format (for local development)
+        credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+      } else {
+        return; // Skip if file doesn't exist
+      }
+      
+      // 프로젝트 ID 형식 검증
+      expect(credentials.project_id).toMatch(/^[a-z][a-z0-9\-]*[a-z0-9]$/);
+      expect(credentials.project_id.length).toBeGreaterThan(5);
+      expect(credentials.project_id.length).toBeLessThan(31);
     });
   });
 
@@ -71,10 +96,10 @@ describe('Environment Setup Validation', () => {
     });
 
     it('should have valid Notion database ID format', () => {
-      // DATABASE_ID가 있다면 UUID 형식이어야 함
+      // DATABASE_ID가 있다면 32자리 hex 형식이어야 함
       const databaseId = process.env.NOTION_DATABASE_ID;
       if (databaseId) {
-        expect(databaseId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+        expect(databaseId).toMatch(/^[0-9a-f]{32}$/);
       }
     });
   });

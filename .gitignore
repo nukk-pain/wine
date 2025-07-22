@@ -34,9 +34,9 @@ package-lock.json
 coverage/
 build/
 .next/
+*.tsbuildinfo
 
 # Plan files
-plan.md
 mock.md
 plan-ori.md
 GEMINI.MD
@@ -65,6 +65,7 @@ playwright.config.ts
 
 # Temporary development files
 public/wine-photos/
+public/uploads/
 vision.json
 
 # Deployment scripts (if not needed in production)
@@ -77,3 +78,34 @@ deployment/
 .vscode/
 *.sublime-workspace
 *.sublime-project
+
+# Editor backup files
+*~
+
+# macOS specific
+.AppleDouble
+.LSOverride
+._*
+
+# Windows specific
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+
+# Runtime files
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional cache directories
+.npm
+.eslintcache
+.cache
+.parcel-cache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
