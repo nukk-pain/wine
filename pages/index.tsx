@@ -377,60 +377,111 @@ export default function MainPage() {
       
       console.log('🚀 [CLIENT] Starting batch analysis for', imagesToProcess.length, 'images');
       
-      // Use the process-multiple API
-      const response = await fetch('/api/process-multiple', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          images: imagesToProcess,
-          useGemini: 'true',
-          skipNotion: 'true'
-        }),
-      });
+      // Use individual process API calls instead of batch
+      console.log('🚀 [CLIENT] Starting individual analysis for', imagesToProcess.length, 'images');
       
-      const result = await response.json();
+      // Process each item individually using Promise.allSettled
+      const analysisResults = await Promise.allSettled(
+        imagesToProcess.map(async (item, index) => {
+          try {
+            // Update individual item progress
+            setProcessingItems(items => 
+              items.map(i => 
+                i.id === item.id 
+                  ? { ...i, status: 'processing', progress: 25 }
+                  : i
+              )
+            );
+            
+            const response = await fetch('/api/process', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                imageUrl: item.url,
+                useGemini: 'true',
+                skipNotion: 'true'
+              }),
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP Error: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+              throw new Error(result.error || 'Analysis failed');
+            }
+            
+            return {
+              id: item.id,
+              success: true,
+              extractedData: result.data.extractedData,
+              type: result.data.type
+            };
+            
+          } catch (error) {
+            return {
+              id: item.id,
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            };
+          }
+        })
+      );
       
-      console.log('📨 [CLIENT] Batch analysis response received');
-      console.log('   Success:', result.success);
-      console.log('   Total:', result.totalImages);
-      console.log('   Success count:', result.successCount);
-      console.log('   Error count:', result.errorCount);
-      
-      if (response.ok && result.success) {
-        // Update items with results
-        setProcessingItems(items => 
-          items.map(item => {
-            const apiResult = result.results.find((r: any) => r.id === item.id);
-            if (apiResult) {
+      // Update all items with their analysis results
+      setProcessingItems(items => 
+        items.map(item => {
+          const analysisResult = analysisResults.find((r, index) => {
+            if (r.status === 'fulfilled') {
+              return r.value.id === item.id;
+            } else if (r.status === 'rejected') {
+              return itemsToProcess[index]?.id === item.id;
+            }
+            return false;
+          });
+          
+          if (analysisResult) {
+            if (analysisResult.status === 'fulfilled') {
+              const result = analysisResult.value;
               return {
                 ...item,
-                status: apiResult.success ? 'completed' : 'error',
-                result: apiResult.success ? { extractedData: apiResult.extractedData, type: apiResult.type } : undefined,
-                error: apiResult.success ? undefined : apiResult.error,
-                progress: apiResult.success ? 100 : 0
+                status: result.success ? 'completed' : 'error',
+                result: result.success ? { extractedData: result.extractedData, type: result.type } : undefined,
+                error: result.success ? undefined : result.error,
+                progress: result.success ? 100 : 0
+              };
+            } else {
+              return {
+                ...item,
+                status: 'error',
+                error: 'Analysis failed unexpectedly',
+                progress: 0
               };
             }
-            return item;
-          })
-        );
-        
-        console.log('✅ [CLIENT] Batch analysis completed successfully!');
-        
-      } else {
-        throw new Error(result.error || 'Batch processing failed');
-      }
+          }
+          return item;
+        })
+      );
+      
+      const successCount = analysisResults.filter(r => 
+        r.status === 'fulfilled' && r.value.success
+      ).length;
+      
+      console.log(`✅ [CLIENT] Individual analysis completed: ${successCount}/${itemsToProcess.length} successful`);
       
     } catch (error) {
-      console.error('❌ [CLIENT] Batch analysis failed:', error);
+      console.error('❌ [CLIENT] Individual analysis failed:', error);
       setError(`분석 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
       
       // Reset processing items back to uploaded/error status
       setProcessingItems(items => 
         items.map(item => 
           item.status === 'processing'
-            ? { ...item, status: 'error', error: 'Batch processing failed', progress: 0 }
+            ? { ...item, status: 'error', error: 'Analysis processing failed', progress: 0 }
             : item
         )
       );
