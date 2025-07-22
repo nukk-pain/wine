@@ -12,8 +12,14 @@ const logConfig = config.logging;
 const logsDir = process.env.NODE_ENV === 'production' 
   ? '/volume2/web/wine/logs' 
   : path.join(process.cwd(), 'logs');
-if (logConfig.fileLogging && !fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+
+// Only create logs directory if not in Vercel environment
+if (logConfig.fileLogging && !process.env.VERCEL && !fs.existsSync(logsDir)) {
+  try {
+    fs.mkdirSync(logsDir, { recursive: true });
+  } catch (error) {
+    console.warn('Failed to create logs directory:', error);
+  }
 }
 
 // Create base logger configuration
@@ -32,8 +38,8 @@ const baseLoggerConfig: winston.LoggerOptions = {
   transports: []
 };
 
-// Add file transports only if file logging is enabled
-if (logConfig.fileLogging && !logConfig.silent) {
+// Add file transports only if file logging is enabled and not in Vercel
+if (logConfig.fileLogging && !logConfig.silent && !process.env.VERCEL) {
   (baseLoggerConfig.transports as winston.transport[]).push(
     // Error log file - only errors
     new winston.transports.File({ 
