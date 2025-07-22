@@ -13,13 +13,17 @@ export function ProcessingProgress({ items, className = '' }: ProcessingProgress
 
   const completedCount = items.filter(item => item.status === 'completed').length;
   const processingCount = items.filter(item => item.status === 'processing').length;
+  const uploadedCount = items.filter(item => item.status === 'uploaded').length;
   const errorCount = items.filter(item => item.status === 'error').length;
   const totalCount = items.length;
-  const progressPercentage = Math.round((completedCount / totalCount) * 100);
+  const progressPercentage = Math.round(((completedCount + errorCount) / totalCount) * 100);
+  const uploadProgressPercentage = Math.round(((uploadedCount + completedCount + errorCount) / totalCount) * 100);
 
   const getOverallStatus = () => {
     if (processingCount > 0) {
       return 'processing';
+    } else if (uploadedCount < totalCount) {
+      return 'uploading';
     } else if (errorCount > 0 && completedCount + errorCount === totalCount) {
       return 'partial';
     } else if (completedCount === totalCount) {
@@ -32,14 +36,16 @@ export function ProcessingProgress({ items, className = '' }: ProcessingProgress
   const getStatusMessage = () => {
     const status = getOverallStatus();
     switch (status) {
+      case 'uploading':
+        return `📤 ${uploadedCount}/${totalCount}개 파일 업로드 완료 (5개씩 배치 업로드)`;
       case 'processing':
-        return `${processingCount}개 이미지 분석 중...`;
+        return `🤖 ${processingCount}개 이미지 AI 분석 중...`;
       case 'completed':
-        return '모든 이미지 분석 완료!';
+        return '🎉 모든 이미지 분석 완료!';
       case 'partial':
-        return `${completedCount}개 완료, ${errorCount}개 오류 발생`;
+        return `✅ ${completedCount}개 완료, ❌ ${errorCount}개 오류 발생`;
       case 'waiting':
-        return '분석 대기 중...';
+        return '⏳ 분석 대기 중...';
       default:
         return '';
     }
@@ -48,6 +54,8 @@ export function ProcessingProgress({ items, className = '' }: ProcessingProgress
   const getProgressColor = () => {
     const status = getOverallStatus();
     switch (status) {
+      case 'uploading':
+        return 'bg-purple-500';
       case 'processing':
         return 'bg-blue-500';
       case 'completed':

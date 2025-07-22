@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import fs from 'fs/promises';
 import path from 'path';
-import { put } from '@vercel/blob';
+import { put, del } from '@vercel/blob';
 import sharp from 'sharp';
 import logger from '@/lib/config/logger';
 
@@ -33,8 +33,9 @@ interface MultipleUploadResponse {
 export const config = {
   api: {
     bodyParser: false, // Disable bodyParser for formidable to handle multipart
-    sizeLimit: '50mb', // Allow larger uploads for multiple files
+    sizeLimit: '25mb', // Reduced from 50mb for Vercel compatibility
   },
+  maxDuration: 60, // Allow up to 60 seconds for processing
 };
 
 // Validate individual file
@@ -186,19 +187,65 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<MultipleUploadResponse>
 ) {
+  const startTime = Date.now();
+  
+  logger.info('Multiple upload API called', {
+    method: req.method,
+    url: req.url,
+    contentType: req.headers['content-type'],
+    userAgent: req.headers['user-agent'],
+    vercelEnv: process.env.VERCEL_ENV || 'none'
+  });
   // Set CORS headers for better compatibility
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
   
+  // Temporary GET endpoint for debugging
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      success: true,
+      totalFiles: 0,
+      successCount: 0,
+      errorCount: 0,
+      results: [],
+      error: `API is working - ${new Date().toISOString()} - Vercel: ${!!process.env.VERCEL}`
+    });
+  }
+  
   if (req.method !== 'POST') {
+    logger.warn('Invalid HTTP method', { 
+      method: req.method, 
+      url: req.url,
+      headers: req.headers
+    });
+    
     return res.status(405).json({ 
       success: false, 
-      error: 'Method not allowed. Only POST requests are supported.',
+      error: `Method ${req.method} not allowed. Only POST requests are supported.`,
+      totalFiles: 0,
+      successCount: 0,
+      errorCount: 0,
+      results: []
+    });
+  }
+  
+  // Validate Content-Type for POST requests
+  const contentType = req.headers['content-type'];
+  if (!contentType || !contentType.includes('multipart/form-data')) {
+    logger.warn('Invalid content type', { 
+      contentType, 
+      method: req.method,
+      url: req.url
+    });
+    
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Content-Type must be multipart/form-data for file uploads',
       totalFiles: 0,
       successCount: 0,
       errorCount: 0,
@@ -219,9 +266,12 @@ export default async function handler(
     const form = formidable({
       keepExtensions: true,
       maxFileSize: MAX_FILE_SIZE,
-      maxFiles: 10, // Limit to 10 files maximum
+      maxFiles: process.env.VERCEL ? 5 : 10, // Reduced limit for Vercel
+      maxTotalFileSize: process.env.VERCEL ? 25 * 1024 * 1024 : 50 * 1024 * 1024, // 25MB for Vercel, 50MB for local
       uploadDir: uploadDir,
       multiples: true, // Enable multiple files
+      allowEmptyFiles: false,
+      minFileSize: 1, // At least 1 byte
       filter: ({ mimetype }) => {
         return mimetype ? ALLOWED_TYPES.includes(mimetype) : false;
       }

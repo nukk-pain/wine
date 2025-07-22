@@ -136,53 +136,106 @@ export default function MainPage() {
     setLoading(true);
     
     try {
-      // First upload all files using the upload-multiple API
-      const formData = new FormData();
-      files.forEach(file => {
-        formData.append('files', file);
-      });
+      console.log(`📤 [CLIENT] Starting batch upload for ${files.length} files`);
       
-      const uploadResponse = await fetch('/api/upload-multiple', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!uploadResponse.ok) {
-        throw new Error(`HTTP Error: ${uploadResponse.status} ${uploadResponse.statusText}`);
+      // Split files into batches of 5
+      const BATCH_SIZE = 5;
+      const batches: File[][] = [];
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        batches.push(files.slice(i, i + BATCH_SIZE));
       }
       
-      let uploadResult;
-      try {
-        const responseText = await uploadResponse.text();
-        console.log('API Response text:', responseText.substring(0, 200) + (responseText.length > 200 ? '...' : ''));
-        
-        if (!responseText.trim()) {
-          throw new Error('Empty response from server');
-        }
-        
-        uploadResult = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        throw new Error('Invalid JSON response from server. Please check server logs.');
-      }
+      console.log(`📦 [CLIENT] Split into ${batches.length} batches`);
       
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Multiple upload failed');
-      }
-      
-      // Create processing items with upload results
-      const newItems: ImageProcessingItem[] = uploadResult.results.map((result: any, index: number) => ({
+      // Initialize processing items for all files
+      const allItems: ImageProcessingItem[] = files.map((file, index) => ({
         id: `${Date.now()}-${index}`,
-        file: files[index],
-        url: result.success ? result.fileUrl : URL.createObjectURL(files[index]),
-        status: result.success ? 'uploaded' : 'error',
-        error: result.success ? undefined : result.error,
-        uploadResult: result
+        file,
+        url: URL.createObjectURL(file),
+        status: 'uploaded',
+        uploadResult: null
       }));
       
-      setProcessingItems(newItems);
+      setProcessingItems(allItems);
       
-      console.log(`Multiple images uploaded: ${uploadResult.successCount}/${files.length} successful`);
+      // Process each batch sequentially
+      const allResults: any[] = [];
+      
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        console.log(`📋 [CLIENT] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} files)`);
+        
+        try {
+          const formData = new FormData();
+          batch.forEach(file => {
+            formData.append('files', file);
+          });
+          
+          const uploadResponse = await fetch('/api/upload-multiple', {
+            method: 'POST',
+            body: formData,
+          });
+          
+          if (!uploadResponse.ok) {
+            throw new Error(`HTTP Error: ${uploadResponse.status} ${uploadResponse.statusText}`);
+          }
+          
+          let uploadResult;
+          try {
+            const responseText = await uploadResponse.text();
+            console.log(`📝 [CLIENT] Batch ${batchIndex + 1} response length:`, responseText.length);
+            
+            if (!responseText.trim()) {
+              throw new Error('Empty response from server');
+            }
+            
+            uploadResult = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            throw new Error(`Batch ${batchIndex + 1}: Invalid JSON response from server`);
+          }
+          
+          if (!uploadResult.success) {
+            console.warn(`⚠️ [CLIENT] Batch ${batchIndex + 1} failed:`, uploadResult.error);
+            // Continue with next batch even if this one fails
+          }
+          
+          // Add results from this batch
+          allResults.push(...uploadResult.results);
+          
+          console.log(`✅ [CLIENT] Batch ${batchIndex + 1} completed: ${uploadResult.successCount}/${batch.length} successful`);
+          
+        } catch (batchError) {
+          console.error(`❌ [CLIENT] Batch ${batchIndex + 1} failed:`, batchError);
+          
+          // Add error results for this batch
+          batch.forEach(() => {
+            allResults.push({
+              success: false,
+              error: `Batch ${batchIndex + 1} failed: ${batchError instanceof Error ? batchError.message : 'Unknown error'}`
+            });
+          });
+        }
+      }
+      
+      // Update processing items with final results
+      const updatedItems: ImageProcessingItem[] = files.map((file, index) => {
+        const result = allResults[index];
+        return {
+          id: `${Date.now()}-${index}`,
+          file,
+          url: result?.success ? result.fileUrl : URL.createObjectURL(file),
+          status: result?.success ? 'uploaded' : 'error',
+          error: result?.success ? undefined : result.error,
+          uploadResult: result
+        };
+      });
+      
+      setProcessingItems(updatedItems);
+      
+      const successCount = allResults.filter(r => r?.success).length;
+      console.log(`🎉 [CLIENT] All batches completed: ${successCount}/${files.length} files successful`);
+      
       
     } catch (error) {
       setError(`업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
@@ -529,7 +582,8 @@ export default function MainPage() {
       const itemsForSave = completedItems.map(item => ({
         id: item.id,
         type: 'wine_label' as const,
-        extractedData: item.result?.extractedData || {}
+        extractedData: item.result?.extractedData || {},
+        imageUrl: item.url // Include imageUrl for blob cleanup
       }));
 
       const response = await fetch('/api/batch-notion', {
@@ -583,7 +637,8 @@ export default function MainPage() {
         .map(item => ({
           id: item.id,
           type: 'wine_label' as const,
-          extractedData: item.result?.extractedData || {}
+          extractedData: item.result?.extractedData || {},
+          imageUrl: item.url // Include imageUrl for blob cleanup
         }));
 
       const selectedIds = selectedItems.map(item => item.id);
@@ -748,8 +803,8 @@ export default function MainPage() {
         <div className="container mx-auto px-4 py-6 max-w-md">
           {/* Mobile-first header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">🍷 와인 추적기</h1>
-            <p className="text-gray-600">라벨이나 영수증을 촬영해서 와인 정보를 기록하세요</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">🍷 Wine tracker</h1>
+            <p className="text-gray-600">라벨을 촬영해서 와인 정보를 기록하세요</p>
           </div>
 
           {/* Mobile-first single column layout */}

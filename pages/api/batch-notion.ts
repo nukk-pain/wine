@@ -18,6 +18,7 @@ interface BatchNotionItem {
   id: string;
   type: 'wine_label' | 'receipt';
   extractedData: WineData | any;
+  imageUrl?: string; // For Vercel Blob cleanup
 }
 
 interface BatchNotionRequest {
@@ -28,6 +29,7 @@ interface BatchNotionRequest {
 
 interface BatchSaveResult {
   id: string;
+  itemId: string; // Same as id, for consistency
   success: boolean;
   notionResult?: any;
   error?: string;
@@ -65,6 +67,7 @@ async function saveSingleItem(item: BatchNotionItem): Promise<BatchSaveResult> {
 
     return {
       id: item.id,
+      itemId: item.id,
       success: true,
       notionResult
     };
@@ -80,6 +83,7 @@ async function saveSingleItem(item: BatchNotionItem): Promise<BatchSaveResult> {
 
     return {
       id: item.id,
+      itemId: item.id,
       success: false,
       error: errorMessage
     };
@@ -116,6 +120,7 @@ async function batchSaveItems(
         }
         results.push({
           id: 'unknown',
+          itemId: 'unknown',
           success: false,
           error: result.status === 'rejected' ? 'Promise rejected unexpectedly' : 'Unknown batch save error'
         });
@@ -241,6 +246,51 @@ export default async function handler(
     // Calculate summary statistics
     const savedCount = saveResults.filter(r => r.success).length;
     const failedCount = saveResults.filter(r => !r.success).length;
+
+    // Cleanup Vercel Blob files for successfully saved items
+    if (savedCount > 0) {
+      try {
+        const successfulItems = saveResults
+          .filter(r => r.success)
+          .map(r => r.itemId);
+        
+        const blobUrls = itemsToSave
+          .filter(item => successfulItems.includes(item.id))
+          .map(item => item.imageUrl)
+          .filter(url => url && url.includes('vercel-storage.com')); // Only Vercel Blob URLs
+        
+        if (blobUrls.length > 0) {
+          logger.info(`Starting blob cleanup for ${blobUrls.length} successfully saved items`);
+          
+          // Call cleanup API
+          const cleanupResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/cleanup-blobs`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ urls: blobUrls })
+          });
+          
+          if (cleanupResponse.ok) {
+            const cleanupResult = await cleanupResponse.json();
+            logger.info('Blob cleanup completed', {
+              deletedCount: cleanupResult.deletedCount,
+              failedCount: cleanupResult.failedCount
+            });
+          } else {
+            logger.warn('Blob cleanup API call failed', {
+              status: cleanupResponse.status,
+              statusText: cleanupResponse.statusText
+            });
+          }
+        }
+      } catch (cleanupError) {
+        logger.warn('Blob cleanup failed', {
+          error: cleanupError instanceof Error ? cleanupError.message : 'Unknown cleanup error'
+        });
+        // Don't fail the main operation if cleanup fails
+      }
+    }
 
     logger.info('Batch Notion save completed', {
       operation: requestBody.operation,

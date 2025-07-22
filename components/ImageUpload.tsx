@@ -7,6 +7,7 @@ interface ImageUploadProps {
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const BATCH_SIZE = 5; // Upload 5 files at a time
 
 export function ImageUpload({ onUpload, multiple = false }: ImageUploadProps) {
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
