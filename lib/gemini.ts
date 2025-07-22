@@ -49,6 +49,13 @@ export class GeminiService {
 
   async extractWineInfo(imageBuffer: Buffer, mimeType: string): Promise<WineInfo> {
     try {
+      // Development logging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🍷 [Gemini] Starting wine label analysis...');
+        console.log('📊 [Gemini] Image size:', imageBuffer.length, 'bytes');
+        console.log('🎯 [Gemini] MIME type:', mimeType);
+        console.log('🤖 [Gemini] Using model:', this.model);
+      }
       const prompt = `You are a wine expert. Analyze this wine label image and extract the following information:
       - Wine name
       - Producer/winery name
@@ -100,26 +107,61 @@ export class GeminiService {
         responseMimeType: 'application/json',
       };
 
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚡ [Gemini] Making API request to Gemini...');
+        console.time('⏱️ [Gemini] Wine analysis duration');
+      }
+
       const response = await genai.models.generateContent({
         model: this.model,
         config,
         contents,
       });
 
+      if (process.env.NODE_ENV === 'development') {
+        console.timeEnd('⏱️ [Gemini] Wine analysis duration');
+        console.log('✅ [Gemini] Received response from Gemini API');
+      }
+
       const text = response.text;
       if (!text) {
         throw new Error('No response from Gemini');
       }
 
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📝 [Gemini] Raw response length:', text.length, 'characters');
+        console.log('🔍 [Gemini] Raw response preview:', text.substring(0, 200) + '...');
+      }
+
       const wineInfo = JSON.parse(text) as WineInfo;
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎉 [Gemini] Successfully parsed wine info:');
+        console.log('   Wine Name:', wineInfo.name);
+        console.log('   Producer:', wineInfo.producer);
+        console.log('   Vintage:', wineInfo.vintage);
+        console.log('   Region:', wineInfo.region);
+      }
+
       return wineInfo;
     } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ [Gemini] Wine analysis error:', error);
+        console.error('   Error type:', error instanceof Error ? error.constructor.name : typeof error);
+        console.error('   Error message:', error instanceof Error ? error.message : String(error));
+      }
       throw error;
     }
   }
 
   async extractReceiptInfo(imageBuffer: Buffer, mimeType: string): Promise<ReceiptInfo> {
     try {
+      // Development logging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🧾 [Gemini] Starting receipt analysis...');
+        console.log('📊 [Gemini] Image size:', imageBuffer.length, 'bytes');
+        console.log('🎯 [Gemini] MIME type:', mimeType);
+      }
       const prompt = `Analyze this receipt image and extract wine purchase information:
       - Store name
       - Purchase date
@@ -166,26 +208,58 @@ export class GeminiService {
         responseMimeType: 'application/json',
       };
 
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚡ [Gemini] Making API request for receipt analysis...');
+        console.time('⏱️ [Gemini] Receipt analysis duration');
+      }
+
       const response = await genai.models.generateContent({
         model: this.model,
         config,
         contents,
       });
 
+      if (process.env.NODE_ENV === 'development') {
+        console.timeEnd('⏱️ [Gemini] Receipt analysis duration');
+        console.log('✅ [Gemini] Received response from Gemini API');
+      }
+
       const text = response.text;
       if (!text) {
         throw new Error('No response from Gemini');
       }
 
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📝 [Gemini] Raw response length:', text.length, 'characters');
+      }
+
       const receiptInfo = JSON.parse(text) as ReceiptInfo;
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎉 [Gemini] Successfully parsed receipt info:');
+        console.log('   Store:', receiptInfo.store_name);
+        console.log('   Items count:', receiptInfo.items?.length || 0);
+        console.log('   Total amount:', receiptInfo.total_amount);
+      }
+
       return receiptInfo;
     } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ [Gemini] Receipt analysis error:', error);
+        console.error('   Error type:', error instanceof Error ? error.constructor.name : typeof error);
+        console.error('   Error message:', error instanceof Error ? error.message : String(error));
+      }
       throw error;
     }
   }
 
   async classifyImage(imageBuffer: Buffer, mimeType: string): Promise<'wine_label' | 'receipt' | 'unknown'> {
     try {
+      // Development logging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 [Gemini] Starting image classification...');
+        console.log('📊 [Gemini] Image size:', imageBuffer.length, 'bytes');
+      }
       const prompt = `Look at this image and classify it as one of the following:
       1. "wine_label" - if it's a wine bottle label
       2. "receipt" - if it's a purchase receipt or invoice
@@ -214,6 +288,10 @@ export class GeminiService {
         responseMimeType: 'text/plain',
       };
 
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚡ [Gemini] Making classification request...');
+      }
+
       const response = await genai.models.generateContent({
         model: this.model,
         config,
@@ -222,12 +300,19 @@ export class GeminiService {
 
       const classification = response.text?.trim().toLowerCase();
       
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🏷️ [Gemini] Classification result:', classification);
+      }
+      
       if (classification === 'wine_label' || classification === 'receipt') {
         return classification;
       }
       
       return 'unknown';
     } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ [Gemini] Classification error:', error);
+      }
       return 'unknown';
     }
   }
