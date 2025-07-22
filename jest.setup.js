@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom'
 
 // Load environment variables for tests
+require('dotenv').config({ path: '.env.local' })
 require('dotenv').config({ path: '.env' })
 
 // Google Cloud Vision API를 위한 Node.js polyfill

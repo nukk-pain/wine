@@ -5,6 +5,9 @@ import { ImageUpload } from '@/components/ImageUpload';
 import { ImageTypeSelector, ImageType } from '@/components/ImageTypeSelector';
 import { ResultDisplay } from '@/components/ResultDisplay';
 import { DataConfirmation } from '@/components/DataConfirmation';
+import { ImagePreviewGrid, ImageProcessingItem } from '@/components/ImagePreviewGrid';
+import { ProcessingProgress } from '@/components/ProcessingProgress';
+import { BatchResultDisplay } from '@/components/BatchResultDisplay';
 
 // Mobile-first layout components
 const MobileLayout = ({ children }: { children: React.ReactNode }) => (
@@ -59,26 +62,86 @@ interface ConfirmationData {
 }
 
 export default function MainPage() {
+  // Single image mode (backward compatibility)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<ImageType | null>(null);
+  const [selectedType, setSelectedType] = useState<ImageType>('wine_label');
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
   const [confirmationData, setConfirmationData] = useState<ConfirmationData | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string>('');
   const [autoDetected, setAutoDetected] = useState<any>(null);
+  
+  // Multiple images mode (default)
+  const [multipleMode, setMultipleMode] = useState(true);
+  const [processingItems, setProcessingItems] = useState<ImageProcessingItem[]>([]);
+  const [saving, setSaving] = useState(false);
 
-  const handleImageUpload = async (file: File) => {
-    setLoading(true);
+  const handleImageUpload = async (files: File[]) => {
+    if (multipleMode) {
+      // Multiple mode (default) - handle all files through multiple upload
+      handleMultipleImageUpload(files);
+    } else {
+      // Single file mode - maintain backward compatibility
+      const file = files[0];
+      setLoading(true);
+      setError('');
+      
+      try {
+        // Upload to Vercel Blob or NAS based on environment
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const uploadResponse = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const uploadResult = await uploadResponse.json();
+        
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.error || 'Upload failed');
+        }
+        
+        // Store the file object and upload result
+        setUploadedFile(file);
+        
+        // For Vercel Blob, use the returned URL; for local, create object URL
+        const imageUrl = uploadResult.url || URL.createObjectURL(file);
+        setUploadedImageUrl(imageUrl);
+        
+        // Reset state for new upload
+        setSelectedType('wine_label'); // Auto-select wine_label since UI is simplified
+        setProcessedData(null);
+        setConfirmationData(null);
+        setLoading(false);
+        setSuccess(false);
+        setError('');
+        setAutoDetected(null);
+        
+        console.log('File uploaded successfully:', uploadResult);
+        
+      } catch (error) {
+        setLoading(false);
+        setError(`업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+        console.error('Upload error:', error);
+      }
+    }
+  };
+
+  const handleMultipleImageUpload = async (files: File[]) => {
     setError('');
+    setLoading(true);
     
     try {
-      // Upload to Vercel Blob or NAS based on environment
+      // First upload all files using the upload-multiple API
       const formData = new FormData();
-      formData.append('file', file);
+      files.forEach(file => {
+        formData.append('files', file);
+      });
       
-      const uploadResponse = await fetch('/api/upload', {
+      const uploadResponse = await fetch('/api/upload-multiple', {
         method: 'POST',
         body: formData,
       });
@@ -86,33 +149,209 @@ export default function MainPage() {
       const uploadResult = await uploadResponse.json();
       
       if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Upload failed');
+        throw new Error(uploadResult.error || 'Multiple upload failed');
       }
       
-      // Store the file object and upload result
-      setUploadedFile(file);
+      // Create processing items with upload results
+      const newItems: ImageProcessingItem[] = uploadResult.results.map((result: any, index: number) => ({
+        id: `${Date.now()}-${index}`,
+        file: files[index],
+        url: result.success ? result.fileUrl : URL.createObjectURL(files[index]),
+        status: result.success ? 'uploaded' : 'error',
+        error: result.success ? undefined : result.error,
+        uploadResult: result
+      }));
       
-      // For Vercel Blob, use the returned URL; for local, create object URL
-      const imageUrl = uploadResult.url || URL.createObjectURL(file);
-      setUploadedImageUrl(imageUrl);
+      setProcessingItems(newItems);
       
-      // Reset state for new upload
-      setSelectedType(null);
-      setProcessedData(null);
-      setConfirmationData(null);
-      setLoading(false);
-      setSuccess(false);
-      setError('');
-      setAutoDetected(null);
-      
-      console.log('File uploaded successfully:', uploadResult);
+      console.log(`Multiple images uploaded: ${uploadResult.successCount}/${files.length} successful`);
       
     } catch (error) {
-      setLoading(false);
       setError(`업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
-      console.error('Upload error:', error);
+      console.error('Multiple upload error:', error);
+    } finally {
+      setLoading(false);
     }
   };
+
+  const handleRemoveImage = (id: string) => {
+    setProcessingItems(items => {
+      const itemToRemove = items.find(item => item.id === id);
+      if (itemToRemove) {
+        // Clean up object URL
+        URL.revokeObjectURL(itemToRemove.url);
+      }
+      return items.filter(item => item.id !== id);
+    });
+  };
+
+  const handleRetryImage = async (id: string) => {
+    const item = processingItems.find(item => item.id === id);
+    if (!item) return;
+    
+    // Set item to processing
+    setProcessingItems(items => 
+      items.map(i => 
+        i.id === id 
+          ? { ...i, status: 'processing', error: undefined, progress: 0 }
+          : i
+      )
+    );
+    
+    try {
+      console.log(`🔄 [CLIENT] Retrying analysis for image ${id}`);
+      
+      // Use the process-multiple API for single retry
+      const response = await fetch('/api/process-multiple', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          images: [{
+            id: item.id,
+            url: item.url,
+            type: 'wine_label'
+          }],
+          useGemini: 'true',
+          skipNotion: 'true'
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success && result.results.length > 0) {
+        const apiResult = result.results[0];
+        
+        setProcessingItems(items => 
+          items.map(i => 
+            i.id === id ? {
+              ...i,
+              status: apiResult.success ? 'completed' : 'error',
+              result: apiResult.success ? { extractedData: apiResult.extractedData, type: apiResult.type } : undefined,
+              error: apiResult.success ? undefined : apiResult.error,
+              progress: apiResult.success ? 100 : 0
+            } : i
+          )
+        );
+        
+        console.log(`✅ [CLIENT] Retry successful for image ${id}`);
+        
+      } else {
+        throw new Error(result.error || 'Retry failed');
+      }
+      
+    } catch (error) {
+      console.error(`❌ [CLIENT] Retry failed for image ${id}:`, error);
+      
+      setProcessingItems(items => 
+        items.map(i => 
+          i.id === id 
+            ? { ...i, status: 'error', error: error instanceof Error ? error.message : 'Retry failed', progress: 0 }
+            : i
+        )
+      );
+    }
+  };
+
+  const handleBatchAnalysis = async () => {
+    if (processingItems.length === 0) return;
+    
+    setLoading(true);
+    setError('');
+    
+    // Identify which items need processing BEFORE updating state
+    const itemsToProcess = processingItems.filter(item => 
+      item.status === 'uploaded' || item.status === 'error'
+    );
+    
+    if (itemsToProcess.length === 0) {
+      setLoading(false);
+      setError('처리할 수 있는 이미지가 없습니다.');
+      return;
+    }
+    
+    // Set all eligible items to processing
+    setProcessingItems(items => 
+      items.map(item => 
+        item.status === 'uploaded' || item.status === 'error'
+          ? { ...item, status: 'processing', progress: 0 }
+          : item
+      )
+    );
+    
+    try {
+      // Prepare images for batch processing using the identified items
+      const imagesToProcess = itemsToProcess.map(item => ({
+        id: item.id,
+        url: item.url,
+        type: 'wine_label' as const
+      }));
+      
+      console.log('🚀 [CLIENT] Starting batch analysis for', imagesToProcess.length, 'images');
+      
+      // Use the process-multiple API
+      const response = await fetch('/api/process-multiple', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          images: imagesToProcess,
+          useGemini: 'true',
+          skipNotion: 'true'
+        }),
+      });
+      
+      const result = await response.json();
+      
+      console.log('📨 [CLIENT] Batch analysis response received');
+      console.log('   Success:', result.success);
+      console.log('   Total:', result.totalImages);
+      console.log('   Success count:', result.successCount);
+      console.log('   Error count:', result.errorCount);
+      
+      if (response.ok && result.success) {
+        // Update items with results
+        setProcessingItems(items => 
+          items.map(item => {
+            const apiResult = result.results.find((r: any) => r.id === item.id);
+            if (apiResult) {
+              return {
+                ...item,
+                status: apiResult.success ? 'completed' : 'error',
+                result: apiResult.success ? { extractedData: apiResult.extractedData, type: apiResult.type } : undefined,
+                error: apiResult.success ? undefined : apiResult.error,
+                progress: apiResult.success ? 100 : 0
+              };
+            }
+            return item;
+          })
+        );
+        
+        console.log('✅ [CLIENT] Batch analysis completed successfully!');
+        
+      } else {
+        throw new Error(result.error || 'Batch processing failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ [CLIENT] Batch analysis failed:', error);
+      setError(`분석 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+      
+      // Reset processing items back to uploaded/error status
+      setProcessingItems(items => 
+        items.map(item => 
+          item.status === 'processing'
+            ? { ...item, status: 'error', error: 'Batch processing failed', progress: 0 }
+            : item
+        )
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const handleTypeSelection = (type: ImageType) => {
     setSelectedType(type);
@@ -130,11 +369,19 @@ export default function MainPage() {
     setLoading(true);
     setError('');
 
+    console.log('🚀 [CLIENT] Starting image analysis...');
+    console.log('   Image type:', type);
+    console.log('   Using Gemini: true');
+    console.log('   Skip Notion: true');
+
     try {
       let response;
       
       // Check if we're in Vercel environment and have a blob URL
       if (uploadedImageUrl && uploadedImageUrl.startsWith('https://')) {
+        console.log('🌐 [CLIENT] Using URL-based processing (Vercel Blob)');
+        console.log('   Image URL:', uploadedImageUrl);
+        
         // Use URL-based processing (Vercel Blob)
         response = await fetch('/api/process', {
           method: 'POST',
@@ -149,6 +396,10 @@ export default function MainPage() {
           }),
         });
       } else {
+        console.log('📁 [CLIENT] Using form data processing (local file)');
+        console.log('   File name:', uploadedFile?.name);
+        console.log('   File size:', uploadedFile?.size, 'bytes');
+        
         // Use form data processing (local file system)
         const formData = new FormData();
         formData.append('image', uploadedFile!);
@@ -162,9 +413,19 @@ export default function MainPage() {
         });
       }
 
+      console.log('📡 [CLIENT] API request sent, waiting for response...');
+
       const result = await response.json();
 
+      console.log('📨 [CLIENT] Received response from API');
+      console.log('   Status:', response.status);
+      console.log('   Success:', result.success);
+
       if (response.ok && result.success) {
+        console.log('✅ [CLIENT] Analysis completed successfully!');
+        console.log('   Detected type:', result.data.type);
+        console.log('   Has extracted data:', !!result.data.extractedData);
+        
         // Show confirmation data instead of immediately saving to Notion
         setConfirmationData({
           type: result.data.type,
@@ -172,9 +433,11 @@ export default function MainPage() {
           savedImagePath: result.data.savedImagePath
         });
       } else {
+        console.error('❌ [CLIENT] Analysis failed:', result.error);
         setError(result.error || '처리 중 오류가 발생했습니다');
       }
     } catch (err) {
+      console.error('❌ [CLIENT] Request failed:', err);
       setError('처리 중 오류가 발생했습니다');
     } finally {
       setLoading(false);
@@ -235,6 +498,115 @@ export default function MainPage() {
     }
   };
 
+  const handleSaveAll = async (completedItems: ImageProcessingItem[]) => {
+    if (completedItems.length === 0) return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      console.log('💾 [CLIENT] Starting batch save all for', completedItems.length, 'items');
+
+      // Prepare items for batch save
+      const itemsForSave = completedItems.map(item => ({
+        id: item.id,
+        type: 'wine_label' as const,
+        extractedData: item.result?.extractedData || {}
+      }));
+
+      const response = await fetch('/api/batch-notion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          operation: 'save_all',
+          items: itemsForSave
+        }),
+      });
+
+      const result = await response.json();
+
+      console.log('💾 [CLIENT] Batch save all response:', result);
+
+      if (response.ok && result.success) {
+        console.log(`✅ [CLIENT] Batch save completed: ${result.savedCount}/${result.totalItems} saved`);
+        
+        // Show success message
+        alert(`성공! ${result.savedCount}개 항목이 Notion에 저장되었습니다.`);
+        
+        if (result.failedCount > 0) {
+          alert(`⚠️ ${result.failedCount}개 항목 저장에 실패했습니다.`);
+        }
+      } else {
+        throw new Error(result.error || 'Batch save failed');
+      }
+
+    } catch (error) {
+      console.error('❌ [CLIENT] Batch save all failed:', error);
+      setError(`일괄 저장 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveSelected = async (selectedItems: ImageProcessingItem[]) => {
+    if (selectedItems.length === 0) return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      console.log('💾 [CLIENT] Starting batch save selected for', selectedItems.length, 'items');
+
+      // Prepare items for batch save
+      const itemsForSave = processingItems
+        .filter(item => item.status === 'completed')
+        .map(item => ({
+          id: item.id,
+          type: 'wine_label' as const,
+          extractedData: item.result?.extractedData || {}
+        }));
+
+      const selectedIds = selectedItems.map(item => item.id);
+
+      const response = await fetch('/api/batch-notion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          operation: 'save_selected',
+          items: itemsForSave,
+          selectedIds
+        }),
+      });
+
+      const result = await response.json();
+
+      console.log('💾 [CLIENT] Batch save selected response:', result);
+
+      if (response.ok && result.success) {
+        console.log(`✅ [CLIENT] Batch save selected completed: ${result.savedCount}/${result.totalItems} saved`);
+        
+        // Show success message
+        alert(`성공! 선택한 ${result.savedCount}개 항목이 Notion에 저장되었습니다.`);
+        
+        if (result.failedCount > 0) {
+          alert(`⚠️ ${result.failedCount}개 항목 저장에 실패했습니다.`);
+        }
+      } else {
+        throw new Error(result.error || 'Batch save selected failed');
+      }
+
+    } catch (error) {
+      console.error('❌ [CLIENT] Batch save selected failed:', error);
+      setError(`선택 저장 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
       <Head>
@@ -260,32 +632,102 @@ export default function MainPage() {
           <MobileLayout>
             <ProcessingStep title="📷 이미지 업로드" className="border-l-4 border-l-blue-500">
               <div data-testid="upload-area">
-                <ImageUpload onUpload={handleImageUpload} />
+                <ImageUpload 
+                  onUpload={handleImageUpload} 
+                  multiple={multipleMode}
+                />
+                
+                {/* Mode toggle button */}
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => {
+                      setMultipleMode(!multipleMode);
+                      setProcessingItems([]);
+                      setUploadedFile(null);
+                      setUploadedImageUrl('');
+                      setSelectedType('wine_label'); // Reset to default type
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 underline"
+                  >
+                    {multipleMode ? '단일 이미지 모드로 전환' : '다중 이미지 모드로 전환'}
+                  </button>
+                </div>
               </div>
             </ProcessingStep>
 
-            {uploadedImageUrl && (
-              <ProcessingStep title="🎯 이미지 타입 선택" className="border-l-4 border-l-orange-500">
-                <ImageTypeSelector 
-                  onSelect={handleTypeSelection}
-                  selected={selectedType}
-                  autoDetected={autoDetected}
-                />
-                {selectedType && (
-                  <div className="mt-6">
-                    <button
-                      onClick={handleAnalysis}
-                      disabled={loading}
-                      className="w-full py-4 px-6 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-bold rounded-xl shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transform active:scale-95"
-                    >
-                      {loading ? '🔄 분석 중...' : '🚀 분석하기'}
-                    </button>
-                  </div>
+            {/* Multiple images preview and progress */}
+            {multipleMode && processingItems.length > 0 && (
+              <>
+                <ProcessingStep title="📸 선택된 이미지들" className="border-l-4 border-l-green-500">
+                  <ImagePreviewGrid 
+                    items={processingItems}
+                    onRemove={handleRemoveImage}
+                    onRetry={handleRetryImage}
+                  />
+                </ProcessingStep>
+
+                <ProcessingStep title="📊 분석 진행상황" className="border-l-4 border-l-yellow-500">
+                  <ProcessingProgress items={processingItems} />
+                </ProcessingStep>
+
+                {processingItems.some(item => item.status === 'uploaded' || item.status === 'error') && (
+                  <ProcessingStep title="🚀 일괄 분석" className="border-l-4 border-l-orange-500">
+                    <div className="text-center">
+                      <p className="text-gray-600 mb-6">
+                        선택된 {processingItems.filter(item => item.status === 'uploaded' || item.status === 'error').length}개 
+                        이미지를 AI가 분석하여 와인 정보를 추출합니다.
+                      </p>
+                      <button
+                        onClick={handleBatchAnalysis}
+                        disabled={loading}
+                        className="w-full py-4 px-6 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-bold rounded-xl shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transform active:scale-95"
+                      >
+                        {loading ? '🔄 분석 중...' : '🚀 모든 이미지 분석하기'}
+                      </button>
+                    </div>
+                  </ProcessingStep>
                 )}
+
+                {/* Batch Results Display - show when analysis is complete */}
+                {processingItems.some(item => item.status === 'completed') && (
+                  <ProcessingStep title="📊 분석 결과" className="border-l-4 border-l-purple-500">
+                    <BatchResultDisplay
+                      items={processingItems}
+                      onSaveAll={handleSaveAll}
+                      onSaveSelected={handleSaveSelected}
+                      loading={saving}
+                    />
+                  </ProcessingStep>
+                )}
+              </>
+            )}
+
+            {!multipleMode && uploadedImageUrl && (
+              <ProcessingStep title="🚀 와인 분석" className="border-l-4 border-l-orange-500">
+                {/* Hidden type selector - functionality preserved */}
+                <div style={{ display: 'none' }}>
+                  <ImageTypeSelector 
+                    onSelect={handleTypeSelection}
+                    selected={selectedType}
+                    autoDetected={autoDetected}
+                  />
+                </div>
+                
+                {/* Only show analyze button */}
+                <div className="text-center">
+                  <p className="text-gray-600 mb-6">AI가 와인 라벨을 분석하여 정보를 추출합니다.</p>
+                  <button
+                    onClick={handleAnalysis}
+                    disabled={loading}
+                    className="w-full py-4 px-6 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-bold rounded-xl shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transform active:scale-95"
+                  >
+                    {loading ? '🔄 분석 중...' : '🚀 분석하기'}
+                  </button>
+                </div>
               </ProcessingStep>
             )}
 
-            {confirmationData && (
+            {!multipleMode && confirmationData && (
               <ProcessingStep title="✅ 정보 확인 및 저장" className="border-l-4 border-l-purple-500">
                 <DataConfirmation
                   type={confirmationData.type}
@@ -299,7 +741,7 @@ export default function MainPage() {
               </ProcessingStep>
             )}
 
-            {processedData && !confirmationData && (
+            {!multipleMode && processedData && !confirmationData && (
               <ProcessingStep title="🎉 저장 완료!" className="border-l-4 border-l-green-500">
                 <div className="text-center py-6">
                   <div className="text-6xl mb-4">✅</div>
@@ -309,7 +751,7 @@ export default function MainPage() {
                     onClick={() => {
                       setUploadedFile(null);
                       setUploadedImageUrl('');
-                      setSelectedType(null);
+                      setSelectedType('wine_label'); // Reset to default instead of null
                       setProcessedData(null);
                       setConfirmationData(null);
                       setSuccess(false);
@@ -323,7 +765,7 @@ export default function MainPage() {
               </ProcessingStep>
             )}
 
-            {loading && !processedData && !confirmationData && (
+            {!multipleMode && loading && !processedData && !confirmationData && (
               <ProcessingStep title="" className="border-l-4 border-l-blue-500">
                 <LoadingSpinner message="AI가 이미지를 분석하고 있습니다..." />
               </ProcessingStep>
@@ -338,7 +780,9 @@ export default function MainPage() {
 
           {/* Mobile tips - always visible */}
           <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-            <h3 className="text-lg font-bold text-blue-800 mb-3">📱 촬영 팁</h3>
+            <h3 className="text-lg font-bold text-blue-800 mb-3">
+              📱 {multipleMode ? '다중 이미지 촬영 팁' : '촬영 팁'}
+            </h3>
             <ul className="space-y-2 text-blue-700">
               <li className="flex items-start space-x-2">
                 <span className="text-blue-500 mt-1">💡</span>
@@ -352,6 +796,18 @@ export default function MainPage() {
                 <span className="text-blue-500 mt-1">🎯</span>
                 <span>글씨가 선명하게 보이도록 초점을 맞추세요</span>
               </li>
+              {multipleMode && (
+                <>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-blue-500 mt-1">📂</span>
+                    <span>여러 이미지를 한 번에 선택하거나 드래그하여 업로드하세요</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-blue-500 mt-1">⚡</span>
+                    <span>모든 이미지가 업로드된 후 일괄 분석하여 시간을 절약하세요</span>
+                  </li>
+                </>
+              )}
             </ul>
           </div>
         </div>

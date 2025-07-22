@@ -1,58 +1,75 @@
 import React, { useState, useRef, ChangeEvent } from 'react';
 
 interface ImageUploadProps {
-  onUpload: (file: File) => void;
+  onUpload: (files: File[]) => void;
+  multiple?: boolean;
 }
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-export function ImageUpload({ onUpload }: ImageUploadProps) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+export function ImageUpload({ onUpload, multiple = false }: ImageUploadProps) {
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    processFile(file);
+    const fileArray = Array.from(files);
+    processFiles(fileArray);
   };
 
-  const processFile = (file: File) => {
+  const processFiles = (files: File[]) => {
     setError(null);
+    const validFiles: File[] = [];
+    const newPreviewUrls: string[] = [];
 
-    // 파일 타입 검증
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setError('이미지 파일만 업로드 가능합니다');
-      return;
+    for (const file of files) {
+      // 파일 타입 검증
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        setError(`${file.name}: 이미지 파일만 업로드 가능합니다`);
+        continue;
+      }
+
+      // 파일 크기 검증
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`${file.name}: 파일 크기는 10MB 이하여야 합니다`);
+        continue;
+      }
+
+      validFiles.push(file);
+
+      // 미리보기 생성
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        newPreviewUrls.push(result);
+        
+        // 모든 파일의 미리보기가 생성되면 상태 업데이트
+        if (newPreviewUrls.length === validFiles.length) {
+          setPreviewUrls(multiple ? [...previewUrls, ...newPreviewUrls] : newPreviewUrls);
+        }
+      };
+      reader.readAsDataURL(file);
     }
 
-    // 파일 크기 검증
-    if (file.size > MAX_FILE_SIZE) {
-      setError('파일 크기는 10MB 이하여야 합니다');
-      return;
+    if (validFiles.length > 0) {
+      // 부모 컴포넌트에 파일 전달
+      onUpload(validFiles);
     }
-
-    // 미리보기 생성
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreviewUrl(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-
-    // 부모 컴포넌트에 파일 전달
-    onUpload(file);
   };
 
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     setIsDragOver(false);
     
-    const file = event.dataTransfer.files[0];
-    if (file) {
-      processFile(file);
+    const files = event.dataTransfer.files;
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files);
+      processFiles(fileArray);
     }
   };
 
@@ -80,14 +97,19 @@ export function ImageUpload({ onUpload }: ImageUploadProps) {
         onClick={() => fileInputRef.current?.click()}
       >
         <div className="text-6xl mb-4">🖼️</div>
-        <h3 className="text-xl font-bold mb-3 text-gray-800">이미지 업로드</h3>
-        <p className="text-gray-600 mb-6">와인 라벨이나 영수증 이미지를 선택해주세요</p>
+        <h3 className="text-xl font-bold mb-3 text-gray-800">
+          {multiple ? '이미지 다중 업로드' : '이미지 업로드'}
+        </h3>
+        <p className="text-gray-600 mb-6">
+          {multiple ? '여러 와인 라벨 이미지를 한 번에 선택해주세요' : '와인 라벨이나 영수증 이미지를 선택해주세요'}
+        </p>
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
+          multiple={multiple}
           onChange={handleFileChange}
-          aria-label="이미지 파일 선택"
+          aria-label={multiple ? "여러 이미지 파일 선택" : "이미지 파일 선택"}
           className="hidden"
         />
         <button
@@ -98,9 +120,11 @@ export function ImageUpload({ onUpload }: ImageUploadProps) {
             fileInputRef.current?.click();
           }}
         >
-          📂 갤러리에서 선택
+          {multiple ? '📂 여러 이미지 선택' : '📂 갤러리에서 선택'}
         </button>
-        <p className="text-sm text-gray-500 mt-3">또는 이미지를 드래그하여 업로드</p>
+        <p className="text-sm text-gray-500 mt-3">
+          {multiple ? '또는 여러 이미지를 드래그하여 업로드' : '또는 이미지를 드래그하여 업로드'}
+        </p>
       </div>
       
       {error && (
@@ -112,21 +136,42 @@ export function ImageUpload({ onUpload }: ImageUploadProps) {
         </div>
       )}
       
-      {previewUrl && (
+      {previewUrls.length > 0 && (
         <div className="mt-6">
-          <h3 className="text-lg font-bold mb-3 text-gray-800">📸 선택된 이미지</h3>
-          <div className="relative">
-            <img 
-              src={previewUrl} 
-              alt="촬영된 이미지" 
-              className="w-full rounded-xl shadow-lg border-2 border-gray-200"
-            />
-            <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-              ✅ 업로드 완료
+          <h3 className="text-lg font-bold mb-3 text-gray-800">
+            📸 선택된 이미지 {multiple && `(${previewUrls.length}개)`}
+          </h3>
+          {multiple ? (
+            <div className="grid grid-cols-2 gap-4">
+              {previewUrls.map((url, index) => (
+                <div key={index} className="relative">
+                  <img 
+                    src={url} 
+                    alt={`선택된 이미지 ${index + 1}`}
+                    className="w-full h-32 object-cover rounded-xl shadow-lg border-2 border-gray-200"
+                  />
+                  <div className="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold">
+                    ✅ {index + 1}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="relative">
+              <img 
+                src={previewUrls[0]} 
+                alt="선택된 이미지" 
+                className="w-full rounded-xl shadow-lg border-2 border-gray-200"
+              />
+              <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                ✅ 업로드 완료
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
+
+export { ImageUpload as default };

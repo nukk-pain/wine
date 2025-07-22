@@ -65,6 +65,7 @@ playwright.config.ts
 
 # Temporary development files
 public/wine-photos/
+public/uploads/
 vision.json
 
 # Deployment scripts (if not needed in production)

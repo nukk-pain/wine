@@ -1,18 +1,15 @@
 import { GoogleGenAI } from '@google/genai';
+import { NotionWineProperties } from './notion-schema';
 
 // Initialize Gemini API with new package
 const genai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
 });
 
-// Wine information schema
-export interface WineInfo {
-  name: string;
-  producer: string;
-  vintage?: number;
-  region?: string;
+// Wine information schema - updated to match Notion properties exactly
+export interface WineInfo extends NotionWineProperties {
+  // Additional fields that might be extracted but not stored in Notion
   country?: string;
-  grape_variety?: string;
   alcohol_content?: string;
   volume?: string;
   wine_type?: string;
@@ -56,35 +53,39 @@ export class GeminiService {
         console.log('🎯 [Gemini] MIME type:', mimeType);
         console.log('🤖 [Gemini] Using model:', this.model);
       }
-      const prompt = `You are a wine expert. Analyze this wine label image and extract the following information:
-      - Wine name
-      - Producer/winery name
-      - Vintage year (if visible)
-      - Region
-      - Country
-      - Grape variety
-      - Alcohol content
-      - Volume (e.g., 750ml)
-      - Wine type (red, white, rosé, sparkling, etc.)
-      - Appellation or classification
-      - Any notable information
+      const prompt = `You are a wine expert. Analyze this wine label image and extract information that matches these specific database fields:
+
+      REQUIRED FIELDS (for Notion database):
+      - Name: The wine name
+      - Vintage: Year as number (or null if not visible)
+      - Region/Producer: Region and/or producer name combined
+      - Price: Price if visible on label (often not present)
+      - Quantity: Number of bottles (usually 1 for label images)
+      - Store: Store name if visible (often not on wine labels)
+      - Varietal(품종): Array of grape varieties (e.g., ["Cabernet Sauvignon", "Merlot"])
+      - Image: Will be handled separately
       
-      Return the information in JSON format with these keys:
+      ADDITIONAL CONTEXT (for reference but not stored):
+      - Country, alcohol content, volume, wine type, appellation
+      
+      Return JSON with exact field names for Notion database:
       {
-        "name": "wine name",
-        "producer": "producer name",
-        "vintage": year or null,
-        "region": "region or null",
-        "country": "country or null",
-        "grape_variety": "grape variety or null",
-        "alcohol_content": "alcohol % or null",
-        "volume": "volume or null",
-        "wine_type": "type or null",
-        "appellation": "appellation or null",
-        "notes": "any other notable information or null"
+        "Name": "wine name (required)",
+        "Vintage": year_as_number_or_null,
+        "Region/Producer": "region and/or producer combined",
+        "Price": price_as_number_or_null,
+        "Quantity": 1,
+        "Store": "store_name_or_empty_string",
+        "Varietal(품종)": ["grape1", "grape2"] or [],
+        "country": "country (for reference)",
+        "alcohol_content": "alcohol % (for reference)",
+        "volume": "volume (for reference)",
+        "wine_type": "type (for reference)",
+        "appellation": "appellation (for reference)",
+        "notes": "any other info (for reference)"
       }
       
-      If you cannot find a specific piece of information, use null for that field.`;
+      Focus on extracting the Notion database fields accurately. Use null for numbers that are not found, empty string for text that is not found, and empty array for varietal if not found.`;
 
       const contents = [
         {
@@ -137,10 +138,10 @@ export class GeminiService {
       
       if (process.env.NODE_ENV === 'development') {
         console.log('🎉 [Gemini] Successfully parsed wine info:');
-        console.log('   Wine Name:', wineInfo.name);
-        console.log('   Producer:', wineInfo.producer);
-        console.log('   Vintage:', wineInfo.vintage);
-        console.log('   Region:', wineInfo.region);
+        console.log('   Wine Name:', wineInfo.Name);
+        console.log('   Region/Producer:', wineInfo['Region/Producer']);
+        console.log('   Vintage:', wineInfo.Vintage);
+        console.log('   Varietals:', wineInfo['Varietal(품종)']);
       }
 
       return wineInfo;

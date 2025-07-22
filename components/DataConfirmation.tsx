@@ -54,34 +54,41 @@ const WineDataDisplay = ({
   <div className="space-y-4">
     <DataField
       label="와인 이름"
-      value={data.name}
-      onChange={isEditing ? (value) => onChange?.('name', value) : undefined}
+      value={data.Name}
+      onChange={isEditing ? (value) => onChange?.('Name', value) : undefined}
     />
     <DataField
-      label="생산자"
-      value={data.producer}
-      onChange={isEditing ? (value) => onChange?.('producer', value) : undefined}
+      label="지역/생산자"
+      value={data['Region/Producer']}
+      onChange={isEditing ? (value) => onChange?.('Region/Producer', value) : undefined}
     />
     <DataField
       label="빈티지 (년도)"
-      value={data.vintage}
+      value={data.Vintage}
       type="number"
-      onChange={isEditing ? (value) => onChange?.('vintage', value) : undefined}
+      onChange={isEditing ? (value) => onChange?.('Vintage', value) : undefined}
     />
     <DataField
-      label="지역"
-      value={data.region}
-      onChange={isEditing ? (value) => onChange?.('region', value) : undefined}
+      label="품종 (Varietal)"
+      value={data['Varietal(품종)']?.join(', ')}
+      onChange={isEditing ? (value) => onChange?.('Varietal(품종)', value ? value.split(',').map((v: string) => v.trim()) : []) : undefined}
     />
     <DataField
-      label="국가"
-      value={data.country}
-      onChange={isEditing ? (value) => onChange?.('country', value) : undefined}
+      label="가격"
+      value={data.Price}
+      type="number"
+      onChange={isEditing ? (value) => onChange?.('Price', value) : undefined}
     />
     <DataField
-      label="포도 품종"
-      value={data.grape_variety}
-      onChange={isEditing ? (value) => onChange?.('grape_variety', value) : undefined}
+      label="수량"
+      value={data.Quantity}
+      type="number"
+      onChange={isEditing ? (value) => onChange?.('Quantity', value) : undefined}
+    />
+    <DataField
+      label="상점"
+      value={data.Store}
+      onChange={isEditing ? (value) => onChange?.('Store', value) : undefined}
     />
     <DataField
       label="알코올 도수"

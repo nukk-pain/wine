@@ -6,6 +6,7 @@ import path from 'path';
 import { processWineImage } from '@/lib/vision';
 import { geminiService } from '@/lib/gemini';
 import { saveWineToNotion, saveReceiptToNotion } from '@/lib/notion';
+import { normalizeWineData } from '@/lib/data-normalizer';
 import logger from '@/lib/config/logger';
 
 // 이미지 저장 경로 설정 (개발/프로덕션 환경에 따라 다름)
@@ -15,9 +16,7 @@ const WINE_PHOTOS_DIR = process.env.NODE_ENV === 'production'
 
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
+    bodyParser: false, // Disable bodyParser for formidable to handle multipart
   },
 };
 
@@ -29,6 +28,12 @@ export default async function handler(
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
+  // Development logging for API entry
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📨 [API] Process endpoint called');
+    console.log('🔗 [API] Content-Type:', req.headers['content-type']);
+  }
+
   try {
     let imageFile: any = null;
     let imageUrl: string | null = null;
@@ -38,6 +43,13 @@ export default async function handler(
 
     // Detect request type based on Content-Type
     const contentType = req.headers['content-type'] || '';
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📋 [API] Analyzing content type for routing...');
+      console.log('   Content-Type header:', contentType);
+      console.log('   Is JSON?', contentType.includes('application/json'));
+      console.log('   Is multipart?', contentType.includes('multipart/form-data'));
+    }
     
     if (contentType.includes('application/json')) {
       // JSON request with imageUrl (Vercel Blob)
@@ -64,17 +76,68 @@ export default async function handler(
       
     } else {
       // Form data request (existing behavior)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📁 [API] Processing form data request');
+      }
+      
+      // Determine upload directory based on environment
+      const uploadDir = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'tmp');
+      
+      // Ensure upload directory exists
+      try {
+        await fs.mkdir(uploadDir, { recursive: true });
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📁 [API] Upload directory already exists or creation failed:', err);
+        }
+      }
+      
       const form = formidable({
         keepExtensions: true,
         maxFileSize: 10 * 1024 * 1024, // 10MB
+        uploadDir: uploadDir,
+        filter: ({ mimetype }) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 [API] Checking file MIME type:', mimetype);
+          }
+          return Boolean(mimetype && mimetype.includes('image'));
+        }
       });
       
-      const [fields, files] = await form.parse(req);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚙️ [API] Starting form parsing...');
+        console.log('📂 [API] Upload directory:', uploadDir);
+      }
       
-      imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
-      type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
-      useGemini = Array.isArray(fields.useGemini) ? fields.useGemini[0] : fields.useGemini;
-      skipNotion = Array.isArray(fields.skipNotion) ? fields.skipNotion[0] : fields.skipNotion;
+      try {
+        // Add timeout for form parsing
+        const parsePromise = form.parse(req);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Form parsing timeout')), 30000)
+        );
+        
+        const [fields, files] = await Promise.race([
+          parsePromise,
+          timeoutPromise
+        ]) as [formidable.Fields, formidable.Files];
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ [API] Form parsing completed');
+          console.log('   Fields:', Object.keys(fields));
+          console.log('   Files:', Object.keys(files));
+        }
+        
+        imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
+        type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
+        useGemini = Array.isArray(fields.useGemini) ? fields.useGemini[0] : fields.useGemini;
+        skipNotion = Array.isArray(fields.skipNotion) ? fields.skipNotion[0] : fields.skipNotion;
+        
+      } catch (parseError) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('❌ [API] Form parsing failed:', parseError);
+        }
+        throw parseError;
+      }
 
       if (!imageFile) {
         return res.status(400).json({ 
@@ -96,7 +159,20 @@ export default async function handler(
     let extractedData;
     let imageType = type as 'wine_label' | 'receipt' | 'auto';
 
+    // Development logging for processing decision
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎯 [API] Processing parameters:');
+      console.log('   Type:', type);
+      console.log('   Use Gemini:', useGemini);
+      console.log('   Skip Notion:', skipNotion);
+      console.log('   Has image file:', !!imageFile);
+      console.log('   Has image URL:', !!imageUrl);
+    }
+
     if (useGemini === 'true') {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🤖 [API] Using Gemini for analysis');
+      }
       try {
         let imageBuffer: Buffer;
         let mimeType: string;
@@ -161,6 +237,9 @@ export default async function handler(
       }
     } else {
       // Use existing OCR-based processing
+      if (process.env.NODE_ENV === 'development') {
+        console.log('👁️ [API] Using Vision API (OCR-based processing)');
+      }
       const imagePath = imageUrl || imageFile.filepath;
       const visionResult = await processWineImage(imagePath);
       extractedData = visionResult.data;
@@ -209,7 +288,9 @@ export default async function handler(
     let notionResults;
 
     if (imageType === 'wine_label') {
-      notionResult = await saveWineToNotion(extractedData, 'wine_label');
+      // Normalize data to ensure correct types
+      const normalizedData = normalizeWineData(extractedData);
+      notionResult = await saveWineToNotion(normalizedData, 'wine_label');
       
       return res.status(200).json({
         success: true,

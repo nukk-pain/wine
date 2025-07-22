@@ -34,7 +34,10 @@
       "Bash(npx tsc:*)",
       "Bash(git commit:*)",
       "Bash(npm:*)",
-      "Bash(./node_modules/.bin/next:*)"
+      "Bash(./node_modules/.bin/next:*)",
+      "Bash(find:*)",
+      "Bash(time npm run type-check)",
+      "Bash(timeout 20s time npm run dev)"
     ],
     "deny": []
   }
