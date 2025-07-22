@@ -53,39 +53,40 @@ export class GeminiService {
         console.log('🎯 [Gemini] MIME type:', mimeType);
         console.log('🤖 [Gemini] Using model:', this.model);
       }
-      const prompt = `You are a wine expert. Analyze this wine label image and extract information that matches these specific database fields:
+      const prompt = `You are a knowledgeable AI wine sommelier. Your task is to analyze a wine label image and populate a JSON object with specific information.
 
-      REQUIRED FIELDS (for Notion database):
-      - Name: The wine name
-      - Vintage: Year as number (or null if not visible)
-      - Region/Producer: Region and/or producer name combined
-      - Price: Price if visible on label (often not present)
-      - Quantity: Number of bottles (usually 1 for label images)
-      - Store: Store name if visible (often not on wine labels)
-      - Varietal(품종): Array of grape varieties (e.g., ["Cabernet Sauvignon", "Merlot"])
-      - Image: Will be handled separately
-      
-      ADDITIONAL CONTEXT (for reference but not stored):
-      - Country, alcohol content, volume, wine type, appellation
-      
-      Return JSON with exact field names for Notion database:
-      {
-        "Name": "wine name (required)",
-        "Vintage": year_as_number_or_null,
-        "Region/Producer": "region and/or producer combined",
-        "Price": price_as_number_or_null,
-        "Quantity": 1,
-        "Store": "store_name_or_empty_string",
-        "Varietal(품종)": ["grape1", "grape2"] or [],
-        "country": "country (for reference)",
-        "alcohol_content": "alcohol % (for reference)",
-        "volume": "volume (for reference)",
-        "wine_type": "type (for reference)",
-        "appellation": "appellation (for reference)",
-        "notes": "any other info (for reference)"
-      }
-      
-      Focus on extracting the Notion database fields accurately. Use null for numbers that are not found, empty string for text that is not found, and empty array for varietal if not found.`;
+### Crucial Rule for "Varietal(품종)" field
+This is the most important instruction.
+1.  **First, try to extract** the grape varietal(s) directly from the text on the label.
+2.  **If the varietal is NOT explicitly written on the label, you MUST use your expert knowledge to INFER it** from the wine's appellation, region, or name. This is a required step.
+3.  **Provide your reasoning** in the "varietal_reasoning" field.
+4.  If the varietal cannot be extracted or reasonably inferred (e.g., for a generic table wine blend), and only then, return an empty array "[]".
+
+**Examples of required inference:**
+* If "appellation" is "Sancerre", "Varietal(품종)" must be ["Sauvignon Blanc"].
+* If "appellation" is "Barolo", "Varietal(품종)" must be ["Nebbiolo"].
+* If "appellation" is "Chablis", "Varietal(품종)" must be ["Chardonnay"].
+* If "name" or "region" includes "Chianti Classico", "Varietal(품종)" should include ["Sangiovese"].
+
+### JSON Output Structure
+Return a single, clean JSON object. Do not add any text before or after the JSON.
+
+{
+  "Name": "wine name (required)",
+  "Vintage": "year_as_number_or_null",
+  "Region/Producer": "region and/or producer combined",
+  "Price": "price_as_number_or_null",
+  "Quantity": 1,
+  "Store": "store_name_or_empty_string",
+  "Varietal(품종)": ["grape1", "grape2"],
+  "varietal_reasoning": "State how you found the varietal (e.g., \"Extracted from label\", \"Inferred from Sancerre appellation\")",
+  "country": "country (for reference)",
+  "alcohol_content": "alcohol % (for reference)",
+  "volume": "volume (for reference)",
+  "wine_type": "type (for reference)",
+  "appellation": "appellation (for reference)",
+  "notes": "any other info (for reference)"
+}`;
 
       const contents = [
         {
