@@ -34,6 +34,7 @@ package-lock.json
 coverage/
 build/
 .next/
+*.tsbuildinfo
 
 # Plan files
 mock.md
@@ -77,3 +78,34 @@ deployment/
 .vscode/
 *.sublime-workspace
 *.sublime-project
+
+# Editor backup files
+*~
+
+# macOS specific
+.AppleDouble
+.LSOverride
+._*
+
+# Windows specific
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+
+# Runtime files
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional cache directories
+.npm
+.eslintcache
+.cache
+.parcel-cache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
