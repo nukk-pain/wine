@@ -162,3 +162,6 @@ deployment/archive/
 *.code-workspace
 .history/
 .vscode/settings.json
+
+# Claude Code settings (local development)
+.claude/settings.local.json
