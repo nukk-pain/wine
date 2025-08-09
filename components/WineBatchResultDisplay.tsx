@@ -37,7 +37,7 @@ interface BatchSaveResult {
   error?: string;
 }
 
-export function BatchResultDisplay({ 
+export function WineBatchResultDisplay({ 
   items, 
   onSaveAll, 
   onSaveSelected, 

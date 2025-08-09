@@ -5,6 +5,9 @@ import path from 'path';
 import sharp from 'sharp';
 // @ts-ignore
 import { put } from '@vercel/blob';
+import { getConfig } from '@/lib/config';
+import { createFormidableConfig, parseFormidableError } from '@/lib/formidable-config';
+import { createApiHandler, sendSuccess, sendError } from '@/lib/api-utils';
 
 // Next.js bodyParser 비활성화 (파일 업로드를 위해)
 export const config = {
@@ -13,21 +16,19 @@ export const config = {
   },
 };
 
+// Get configuration
+const appConfig = getConfig();
+
 // Vercel 환경에서는 /tmp 사용, 로컬에서는 public/uploads 사용
 const UPLOAD_DIR = process.env.UPLOAD_DIR || 
   (process.env.VERCEL_ENV ? '/tmp' : 
     (process.env.NODE_ENV === 'production' ? '/volume2/web/wine/wine-photos' : 
-      path.join(process.cwd(), 'public', 'uploads')));
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      appConfig.upload.uploadDir));
+const MAX_FILE_SIZE = appConfig.upload.maxFileSize;
+const ALLOWED_TYPES = appConfig.upload.allowedTypes;
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+export default createApiHandler({
+  POST: async (req, res) => {
 
   try {
     // 업로드 디렉토리 확인 및 생성
@@ -66,8 +67,7 @@ export default async function handler(
       savedFile = await saveAndOptimizeFile(file);
     }
 
-    res.json({
-      success: true,
+    sendSuccess(res, {
       fileName: savedFile.fileName,
       filePath: savedFile.filePath,
       fileUrl: savedFile.fileUrl || `/uploads/${savedFile.fileName}`,
@@ -79,12 +79,10 @@ export default async function handler(
 
   } catch (error: any) {
     console.error('Upload error:', error);
-    res.status(500).json({ 
-      error: 'File upload failed',
-      details: error.message 
-    });
+    sendError(res, 'File upload failed', 500, error.message);
   }
-}
+  }
+});
 
 async function ensureUploadDir() {
   try {
@@ -106,31 +104,11 @@ async function ensureUploadDir() {
 
 async function parseUploadedFile(req: NextApiRequest): Promise<{ file?: any; error?: string }> {
   return new Promise((resolve) => {
-    // Vercel 환경에서는 /tmp 사용, 로컬에서는 ./tmp 사용
-    const tempDir = process.env.VERCEL_ENV ? '/tmp' : path.join(process.cwd(), 'tmp');
-    
-    const form = formidable({
-      uploadDir: tempDir,
-      keepExtensions: true,
-      maxFileSize: MAX_FILE_SIZE,
-      filter: ({ mimetype }) => {
-        if (!mimetype) return false;
-        return ALLOWED_TYPES.includes(mimetype);
-      }
-    });
+    const form = formidable(createFormidableConfig());
 
     form.parse(req, (err, _fields, files) => {
       if (err) {
-        // 특정 에러 메시지 처리
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          resolve({ error: 'File too large. Maximum 10MB allowed.' });
-          return;
-        }
-        if (err.code === 'LIMIT_FILE_TYPE') {
-          resolve({ error: 'Invalid file type. Only images allowed.' });
-          return;
-        }
-        resolve({ error: err.message });
+        resolve({ error: parseFormidableError(err) });
         return;
       }
 

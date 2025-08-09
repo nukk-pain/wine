@@ -38,7 +38,15 @@
       "Bash(find:*)",
       "Bash(time npm run type-check)",
       "Bash(timeout 20s time npm run dev)",
-      "Bash(npx vercel logs:*)"
+      "Bash(npx vercel logs:*)",
+      "Bash(tree:*)",
+      "Bash(mv:*)",
+      "Bash(echo:*)",
+      "Bash(NODE_ENV=development npm test -- __tests__/integration/complete-workflow.test.ts --verbose)",
+      "Bash(touch:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(git rm:*)",
+      "Bash(git push:*)"
     ],
     "deny": []
   }

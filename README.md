@@ -2,29 +2,30 @@
 
 AI 기반 와인 라벨 및 영수증 인식을 통한 모바일 우선 와인 관리 시스템
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyour-username%2Fwine-tracker)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwine)
 
 ## 🌟 주요 기능
 
 - **📱 모바일 최적화**: 터치 친화적 UI로 모바일에서 완벽한 사용 경험
 - **🤖 AI 이미지 분석**: Google Gemini & Vision API를 활용한 와인 정보 자동 추출
-- **📷 카메라 직접 촬영**: 모바일 카메라로 와인 라벨 또는 영수증 직접 촬영
-- **💾 Notion 자동 저장**: 추출된 정보를 Notion 데이터베이스에 자동 저장
-- **✅ 데이터 확인 및 수정**: 저장 전 정보 확인 및 편집 가능
+- **📷 다중 이미지 처리**: 카메라 직접 촬영 및 여러 이미지 배치 처리 지원
+- **✏️ 편집 워크플로우**: AI 분석 후 수동 편집 및 재요청 기능
+- **💾 Notion 자동 저장**: 배치 처리를 통한 효율적인 데이터베이스 저장
+- **🔄 재처리 기능**: 실패한 처리에 대한 재요청 및 오류 복구
 - **☁️ 서버리스 아키텍처**: Vercel의 안정적이고 확장 가능한 인프라
 
 ## 🚀 빠른 시작 (Vercel 배포)
 
 ### 1. Vercel에 배포
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyour-username%2Fwine-tracker)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwine)
 
 또는 수동으로:
 
 ```bash
 # 프로젝트 클론
-git clone https://github.com/your-username/wine-tracker.git
-cd wine-tracker
+git clone https://github.com/wine.git
+cd wine
 
 # Vercel CLI 설치 및 배포
 npm install -g vercel
@@ -135,8 +136,13 @@ npm run build
 # 타입 체크
 npm run type-check
 
-# 테스트 실행
-npm test
+# 테스트 실행 (커스텀 테스트 러너)
+npm test                    # 모든 Jest 테스트
+npm run test:unit          # 단위 테스트만
+npm run test:integration   # 통합 테스트만
+npm run test:performance   # 성능 테스트
+npm run test:all           # 모든 테스트 카테고리
+npm run test:ci            # CI용 (실패 시에도 계속)
 
 # E2E 테스트
 npm run test:e2e
@@ -158,28 +164,32 @@ npm run lint
 
 ### 디렉토리 구조
 ```
-wine-tracker/
-├── __tests__/               # 테스트 파일
-│   ├── unit/               # 단위 테스트
-│   ├── integration/        # 통합 테스트
-│   └── e2e/               # E2E 테스트
+wine/
+├── __tests__/               # 포괄적 테스트 스위트
+│   ├── unit/               # 단위 테스트 (컴포넌트, 파서, 유틸리티)
+│   ├── integration/        # 통합 테스트 (API, 워크플로우)
+│   ├── performance/        # 성능 테스트 (캐싱, 메모리)
+│   └── e2e/               # E2E 테스트 (Playwright)
 ├── components/             # React 컴포넌트
-├── lib/                   # 유틸리티 및 설정
+│   ├── workflows/         # 워크플로우 컴포넌트
+│   └── ...
+├── lib/                   # 핵심 라이브러리
 │   ├── config/            # 환경별 설정
 │   ├── parsers/           # AI 응답 파서
 │   └── ...
 ├── pages/                 # Next.js 페이지
-│   └── api/              # API 라우트
-├── public/               # 정적 파일
-└── styles/               # 스타일 파일
+│   └── api/              # API 라우트 (업로드, 처리, Notion)
+├── scripts/               # 커스텀 테스트 러너
+└── public/               # 정적 파일 및 업로드
 ```
 
 ### 데이터 플로우
-1. **이미지 업로드** → Vercel Blob 저장
-2. **AI 분석** → Google Vision/Gemini API 호출
-3. **데이터 파싱** → 구조화된 와인 정보 추출
-4. **사용자 확인** → 편집 가능한 인터페이스 제공
-5. **Notion 저장** → 최종 데이터베이스 저장
+1. **이미지 업로드** → Vercel Blob 저장 (단일/다중)
+2. **AI 분석** → Vision API (OCR) + Gemini (구조화 파싱)
+3. **결과 처리** → 데이터 정규화 및 검증
+4. **편집 워크플로우** → 사용자 확인 및 수정 인터페이스
+5. **배치 저장** → Notion 데이터베이스 일괄 처리
+6. **후처리** → Blob 정리 및 캐시 관리
 
 ## 📱 사용 방법
 
@@ -244,14 +254,16 @@ npm run dev
 
 #### 테스트 실행
 ```bash
-# 전체 테스트
-npm test
+# 커스텀 테스트 러너 사용
+npm run test:all           # 전체 테스트 (unit, integration, performance)
+npm run test:unit          # 단위 테스트만
+npm run test:integration   # 통합 테스트만
+npm run test:performance   # 성능 테스트만
+npm run test:ci            # CI 환경 (계속 실행)
 
-# 특정 테스트
-npm test -- integration
-
-# 커버리지 리포트
-npm test -- --coverage
+# 표준 Jest 명령어
+npm test                    # 기본 Jest 실행
+npm test -- --coverage     # 커버리지 리포트
 ```
 
 ## 🔒 보안 고려사항
@@ -280,7 +292,7 @@ npm test -- --coverage
 # 로컬 변경사항 배포
 git add .
 git commit -m "Update features"
-git push origin main
+git push origin master
 
 # Vercel이 자동으로 배포 수행
 ```

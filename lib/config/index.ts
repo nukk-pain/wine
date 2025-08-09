@@ -182,7 +182,7 @@ export const uploadConfig: Record<Environment, UploadConfig> = {
   development: {
     uploadDir: process.env.UPLOAD_DIR || './uploads',
     maxFileSize: 10 * 1024 * 1024, // 10MB
-    allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
     imageStorage: {
       nas: {
         enabled: false,

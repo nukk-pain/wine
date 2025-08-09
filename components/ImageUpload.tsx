@@ -1,13 +1,12 @@
 import React, { useState, useRef, ChangeEvent } from 'react';
+import { UPLOAD_CONSTANTS } from '@/lib/constants';
 
 interface ImageUploadProps {
   onUpload: (files: File[]) => void;
   multiple?: boolean;
 }
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const BATCH_SIZE = 5; // Upload 5 files at a time
+const { ALLOWED_TYPES, MAX_FILE_SIZE, BATCH_SIZE } = UPLOAD_CONSTANTS;
 
 export function ImageUpload({ onUpload, multiple = false }: ImageUploadProps) {
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);

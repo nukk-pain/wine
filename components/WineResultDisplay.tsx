@@ -20,7 +20,7 @@ export interface ReceiptData {
   total: number;
 }
 
-export interface ResultDisplayProps {
+export interface WineResultDisplayProps {
   data: WineData | ReceiptData;
   type: 'wine_label' | 'receipt';
   loading?: boolean;
@@ -29,14 +29,14 @@ export interface ResultDisplayProps {
   onSave?: () => void;
 }
 
-export function ResultDisplay({ 
+export function WineResultDisplay({ 
   data, 
   type, 
   loading = false, 
   success = false, 
   error, 
   onSave 
-}: ResultDisplayProps) {
+}: WineResultDisplayProps) {
   const formatPrice = (price: number) => {
     return `₩${price.toLocaleString()}`;
   };

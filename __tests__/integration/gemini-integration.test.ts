@@ -9,7 +9,7 @@ describe('Gemini Integration', () => {
 
   beforeAll(async () => {
     // Use test1.jpg as specified in CLAUDE.md
-    const testImagePath = path.join(process.cwd(), 'public', 'test1.jpg');
+    const testImagePath = path.join(process.cwd(), 'test-assets', 'test1.jpg');
     
     if (fs.existsSync(testImagePath)) {
       testImageBuffer = fs.readFileSync(testImagePath);

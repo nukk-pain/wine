@@ -5,9 +5,12 @@ import fs from 'fs/promises';
 import path from 'path';
 import { put, del } from '@vercel/blob';
 import sharp from 'sharp';
+import { getConfig } from '@/lib/config';
+import { createFormidableConfig, parseFormidableError, getTempDir } from '@/lib/formidable-config';
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const appConfig = getConfig();
+const ALLOWED_TYPES = appConfig.upload.allowedTypes;
+const MAX_FILE_SIZE = appConfig.upload.maxFileSize;
 
 interface UploadResult {
   success: boolean;
@@ -259,22 +262,12 @@ export default async function handler(
 
   try {
     // Set up formidable for multiple file uploads
-    const uploadDir = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'tmp');
+    const uploadDir = getTempDir();
     await fs.mkdir(uploadDir, { recursive: true });
 
-    const form = formidable({
-      keepExtensions: true,
-      maxFileSize: MAX_FILE_SIZE,
-      maxFiles: process.env.VERCEL ? 5 : 10, // Reduced limit for Vercel
-      maxTotalFileSize: process.env.VERCEL ? 25 * 1024 * 1024 : 50 * 1024 * 1024, // 25MB for Vercel, 50MB for local
-      uploadDir: uploadDir,
-      multiples: true, // Enable multiple files
-      allowEmptyFiles: false,
-      minFileSize: 1, // At least 1 byte
-      filter: ({ mimetype }) => {
-        return mimetype ? ALLOWED_TYPES.includes(mimetype) : false;
-      }
-    });
+    const form = formidable(createFormidableConfig({
+      multiples: true // Enable multiple files
+    }));
 
     if (process.env.NODE_ENV === 'development') {
       console.log('⚙️ [API] Starting multiple file form parsing...');
