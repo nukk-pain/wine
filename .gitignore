@@ -109,3 +109,56 @@ pids
 
 # Yarn Integrity file
 .yarn-integrity
+
+# Additional cleanup patterns for regular maintenance
+*.old
+*.bak
+*.tmp
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+
+# Build cache files
+*.tsbuildinfo
+.next/cache/.tsbuildinfo
+.next/cache/webpack/*/*.old
+.swc/
+
+# Upload directories (development/test files)
+uploads/*
+!uploads/.gitkeep
+tmp/*
+!tmp/.gitkeep
+
+# Log files (keep directory structure but ignore content)
+logs/*.log
+!logs/.gitkeep
+
+# Test and development artifacts
+playwright-report/
+test-results/
+coverage/
+
+# Development images in root (duplicates should be in test-assets/)
+/test1.jpg
+/test2.jpg
+
+# Archive directories
+logs/archive/
+deployment/archive/
+
+# Temporary download files
+*.crdownload
+*.part
+
+# Package manager temporary files
+.npm-cache/
+.yarn-cache/
+.pnpm-store/
+
+# IDE/Editor temporary files
+*.code-workspace
+.history/
+.vscode/settings.json
