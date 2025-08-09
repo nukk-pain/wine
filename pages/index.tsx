@@ -3,11 +3,11 @@ import { useState } from 'react';
 import Head from 'next/head';
 import { ImageUpload } from '@/components/ImageUpload';
 import { ImageTypeSelector, ImageType } from '@/components/ImageTypeSelector';
-import { ResultDisplay } from '@/components/ResultDisplay';
+import { WineResultDisplay } from '@/components/WineResultDisplay';
 import { DataConfirmation } from '@/components/DataConfirmation';
 import { ImagePreviewGrid, ImageProcessingItem } from '@/components/ImagePreviewGrid';
 import { ProcessingProgress } from '@/components/ProcessingProgress';
-import { BatchResultDisplay } from '@/components/BatchResultDisplay';
+import { WineBatchResultDisplay } from '@/components/WineBatchResultDisplay';
 import { NotionWineProperties } from '@/lib/notion-schema';
 
 // Mobile-first layout components
@@ -251,12 +251,6 @@ export default function MainPage() {
       
       const successCount = allResults.filter(r => r?.success).length;
       console.log(`🎉 [CLIENT] All batches completed: ${successCount}/${files.length} files successful`);
-      
-      // 🚨 CRITICAL FIX: Auto-process uploaded images
-      if (successCount > 0) {
-        console.log(`🔄 [CLIENT] Starting auto-processing for ${successCount} uploaded images...`);
-        await handleBatchAnalyze(updatedItems.filter(item => item.status === 'uploaded'));
-      }
       
     } catch (error) {
       setError(`업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
@@ -1073,7 +1067,7 @@ export default function MainPage() {
                 {/* Batch Results Display - show when analysis is complete */}
                 {processingItems.some(item => item.status === 'completed') && (
                   <ProcessingStep title="📊 분석 결과" className="border-l-4 border-l-purple-500">
-                    <BatchResultDisplay
+                    <WineBatchResultDisplay
                       items={processingItems}
                       onSaveAll={handleSaveAll}
                       onSaveSelected={handleSaveSelected}

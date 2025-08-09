@@ -4,7 +4,7 @@ import fs from 'fs';
 import { extractTextFromImage } from '@/lib/vision';
 
 describe('Google Vision API Integration', () => {
-  const testImagePath = path.join(__dirname, '../../test1.jpg');
+  const testImagePath = path.join(__dirname, '../../test-assets/test1.jpg');
   
   beforeAll(() => {
     // 테스트 이미지가 존재하는지 확인
@@ -36,7 +36,7 @@ describe('Google Vision API Integration', () => {
 
   it('should return text for test2.jpg image', async () => {
     // test2.jpg는 영수증 이미지로 사용
-    const test2ImagePath = path.join(__dirname, '../../test2.jpg');
+    const test2ImagePath = path.join(__dirname, '../../test-assets/test2.jpg');
     
     if (fs.existsSync(test2ImagePath)) {
       const extractedText = await extractTextFromImage(test2ImagePath);

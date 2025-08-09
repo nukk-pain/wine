@@ -38,7 +38,9 @@
       "Bash(find:*)",
       "Bash(time npm run type-check)",
       "Bash(timeout 20s time npm run dev)",
-      "Bash(npx vercel logs:*)"
+      "Bash(npx vercel logs:*)",
+      "Bash(tree:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

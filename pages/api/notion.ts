@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { saveWineToNotion, saveReceiptToNotion, updateWineRecord, WineData, ReceiptData, saveWineToNotionV2 } from '@/lib/notion';
 import { WineInfo, ReceiptInfo } from '@/lib/gemini';
 import { NotionWineProperties, validateWineData } from '@/lib/notion-schema';
+import { createApiHandler, sendSuccess, sendError, validateRequiredFields } from '@/lib/api-utils';
 
 // Convert Gemini WineInfo to Notion WineData format
 function convertWineInfoToWineData(wineInfo: WineInfo): WineData {
@@ -32,25 +33,25 @@ function convertReceiptInfoToReceiptData(receiptInfo: ReceiptInfo): ReceiptData 
   };
 }
 
-export default async function handler(
+export default createApiHandler({
+  POST: async (req, res) => {
+    await handleNotionRequest(req, res);
+  },
+  PUT: async (req, res) => {
+    await handleNotionRequest(req, res);
+  }
+});
+
+async function handleNotionRequest(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  if (!['POST', 'PUT'].includes(req.method || '')) {
-    return res.status(405).json({ 
-      success: false, 
-      error: 'Method not allowed' 
-    });
-  }
 
   try {
     const { action, data, source, pageId, status, imageUrl } = req.body;
 
     if (!action) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing action'
-      });
+      return sendError(res, 'Missing action', 400);
     }
 
     let result;
@@ -59,19 +60,12 @@ export default async function handler(
       case 'save_wine_v2':
         // New API for NotionWineProperties
         if (!data) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required wine data'
-          });
+          return sendError(res, 'Missing required wine data', 400);
         }
 
         const validation = validateWineData(data as NotionWineProperties);
         if (!validation.isValid) {
-          return res.status(400).json({ 
-            success: false,
-            error: 'Invalid wine data', 
-            details: validation.errors 
-          });
+          return sendError(res, 'Invalid wine data', 400, validation.errors);
         }
 
         result = await saveWineToNotionV2(data as NotionWineProperties);
@@ -79,10 +73,7 @@ export default async function handler(
 
       case 'save_wine':
         if (!data) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required data'
-          });
+          return sendError(res, 'Missing required data', 400);
         }
         
         // Convert Gemini format to Notion format if needed
@@ -107,10 +98,7 @@ export default async function handler(
 
       case 'save_receipt':
         if (!data) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required data'
-          });
+          return sendError(res, 'Missing required data', 400);
         }
         
         // Convert Gemini format to Notion format if needed
@@ -134,19 +122,13 @@ export default async function handler(
 
       case 'update_status':
         if (!pageId || !status) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing pageId or status'
-          });
+          return sendError(res, 'Missing pageId or status', 400);
         }
         result = await updateWineRecord(pageId, status);
         break;
 
       default:
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid action'
-        });
+        return sendError(res, 'Invalid action', 400);
     }
 
     // Cleanup Vercel Blob file if save was successful and we have an imageUrl
@@ -171,17 +153,15 @@ export default async function handler(
       }
     }
 
-    res.status(200).json({
-      success: true,
-      result
-    });
+    sendSuccess(res, result);
 
   } catch (error) {
     console.error('Notion API error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Notion operation failed',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+    sendError(
+      res, 
+      'Notion operation failed', 
+      500, 
+      error instanceof Error ? error.message : 'Unknown error'
+    );
   }
 }

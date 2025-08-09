@@ -7,6 +7,7 @@ import { processWineImage } from '@/lib/vision';
 import { geminiService } from '@/lib/gemini';
 import { saveWineToNotion, saveReceiptToNotion } from '@/lib/notion';
 import { normalizeWineData } from '@/lib/data-normalizer';
+import { createFormidableConfig, parseFormidableError, getTempDir } from '@/lib/formidable-config';
 
 // 이미지 저장 경로 설정 (개발/프로덕션 환경에 따라 다름)
 const WINE_PHOTOS_DIR = process.env.NODE_ENV === 'production' 
@@ -148,17 +149,9 @@ export default async function handler(
         }
       }
       
-      const form = formidable({
-        keepExtensions: true,
-        maxFileSize: 10 * 1024 * 1024, // 10MB
-        uploadDir: uploadDir,
-        filter: ({ mimetype }) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🔍 [API] Checking file MIME type:', mimetype);
-          }
-          return Boolean(mimetype && mimetype.includes('image'));
-        }
-      });
+      const form = formidable(createFormidableConfig({
+        uploadDir: uploadDir
+      }));
       
       if (process.env.NODE_ENV === 'development') {
         console.log('⚙️ [API] Starting form parsing...');

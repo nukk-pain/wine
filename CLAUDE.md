@@ -42,7 +42,6 @@ You are a senior software engineer who follows Kent Beck's Test-Driven Developme
   3. The change represents a single logical unit of work
   4. Commit messages clearly state whether the commit contains structural or behavioral changes
 - Use small, frequent commits rather than large, infrequent ones
-- commit 하라고 하기 전까지는 commit하지 마
 
 # CODE QUALITY STANDARDS
 
@@ -79,31 +78,37 @@ Always write one test at a time, make it run, then improve structure. Always run
 
 # PROJECT OVERVIEW
 
-This is a Wine Tracker application designed for both cloud (Vercel) and on-premise (Synology NAS) deployment. The application uses AI/OCR to extract information from wine labels and receipts, then saves the data to a Notion database.
+This is a Wine Tracker application (version 1.0.7) designed primarily for cloud deployment on Vercel with mobile-first UI. The application uses AI/OCR to extract information from wine labels and receipts, then saves the data to a Notion database.
 
 ## Technology Stack
 - **Frontend/Backend**: Next.js 14 with API Routes, TypeScript, Tailwind CSS
-- **Cloud Deployment**: Vercel with automatic CI/CD
-- **On-Premise Deployment**: Synology NAS + PM2 process management
-- **AI/OCR**: Google Vision API + Google Gemini API for text extraction and parsing
-- **Database**: Notion API
-- **Cloud Storage**: Vercel Blob (production), local filesystem (development/NAS)
+- **Primary Deployment**: Vercel with automatic CI/CD
+- **AI/OCR**: Google Vision API (@google-cloud/vision v4.3.3) + Google Gemini API (@google/genai v1.10.0)
+- **Database**: Notion API (@notionhq/client v2.3.0)
+- **Storage**: Vercel Blob (@vercel/blob v1.1.1) for production images
 - **Testing**: Jest, React Testing Library, Playwright
+- **Image Processing**: Sharp v0.32.6, Formidable v3.5.1, Node-cache v5.1.2
 
 ## Architecture Overview
 
 The application follows a layered architecture:
-1. **UI Layer**: React components for image upload, camera capture, and result display
+1. **UI Layer**: Mobile-first React components
+   - `UnifiedWorkflow.tsx` - Main workflow component
+   - `ImageUpload.tsx` - Camera/file upload with preview
+   - `WineResultDisplay.tsx` - Results with edit capabilities
+   - `ProcessingProgress.tsx` - Real-time progress indication
 2. **API Layer**: Next.js API routes
-   - `/api/upload` - Handles file uploads (supports Vercel Blob and local storage)
-   - `/api/process` - AI/OCR processing pipeline
-   - `/api/notion` - Notion database operations
+   - `/api/upload` & `/api/upload-multiple` - File uploads with Vercel Blob
+   - `/api/process` & `/api/process-multiple` - AI processing pipeline
+   - `/api/process-with-edit` - Edit workflow support
+   - `/api/notion` & `/api/batch-notion` - Database operations
+   - `/api/cleanup-blobs` - Storage cleanup
 3. **Service Layer**: 
-   - Image classification (wine labels vs receipts)
-   - OCR text extraction (Google Vision API)
-   - AI parsing (Google Gemini API)
-   - Notion database operations
-4. **Storage Layer**: Vercel Blob (cloud) or local filesystem (development/NAS)
+   - Image classification and OCR caching (`lib/vision-cache.ts`)
+   - Structured AI parsing with Gemini (`lib/gemini-parser.ts`)
+   - Environment-aware configuration (`lib/config/`)
+   - Error handling and validation (`lib/error-handling.ts`, `lib/validation.ts`)
+4. **Storage Layer**: Vercel Blob with automatic cleanup
 
 ## Key Development Commands
 
@@ -112,29 +117,40 @@ The application follows a layered architecture:
 npm run dev                  # Start development server
 npm run build               # Build for production
 npm run start               # Start production server
+npm run lint                # ESLint check
 npm run type-check          # TypeScript type checking
 
-# Testing
+# Testing (using custom test runner)
 npm test                    # Run all Jest tests
 npm run test:unit          # Run unit tests only
 npm run test:integration   # Run integration tests
-npm run test:e2e           # Run Playwright E2E tests
-npm run test:watch         # Run tests in watch mode
+npm run test:performance   # Run performance tests
+npm run test:vision        # Run Vision API specific tests
+npm run test:all           # Run all test suites
 npm run test:ci            # Run all tests (continue on failure)
+npm run test:watch         # Run tests in watch mode
+npm run test:e2e           # Run Playwright E2E tests
 
-# Deployment
+# Deployment (legacy scripts maintained)
 npm run deploy             # Deploy to NAS (requires setup)
 npm run setup-nas          # Initial NAS setup
+npm run backup             # Backup deployment
 vercel                     # Deploy to Vercel
 ```
 
 ## Environment Configuration
 
-The application uses environment-aware configuration (see `lib/config/index.ts`):
+The application uses sophisticated environment-aware configuration (see `lib/config/index.ts`):
 
-- **Development**: Mock APIs available, local file storage, debug logging
-- **Production**: Real APIs, Vercel Blob or NAS storage, info logging  
-- **Test**: Mock APIs only, test file storage, minimal logging
+- **Development**: Real APIs with caching, local file storage, comprehensive logging
+- **Production**: Optimized for Vercel serverless, Blob storage, structured logging  
+- **Test**: Mock APIs with __mocks__ system, test file storage, minimal logging
+
+Key configuration features:
+- Memory management with configurable limits
+- Vision API caching with TTL
+- Automatic Vercel vs local environment detection
+- Service timeout and retry configuration
 
 ### Environment Variables
 
@@ -159,31 +175,38 @@ UPLOAD_DIR=/custom/upload/path (optional)
 
 The project includes comprehensive testing at multiple levels:
 
-1. **Unit Tests** (`__tests__/unit/`): Test individual parsers and utilities
-2. **Integration Tests** (`__tests__/integration/`): Test API endpoints and service integration
-3. **E2E Tests** (`__tests__/e2e/`): Full workflow testing with Playwright
+1. **Unit Tests** (`__tests__/unit/`): Individual components, parsers, and utilities
+2. **Integration Tests** (`__tests__/integration/`): API endpoints, workflow, and service integration
+3. **Performance Tests** (`__tests__/performance/`): Vision API caching and memory management
+4. **E2E Tests** (`__tests__/e2e/`): Full workflow with Playwright
 
-### Test Files
-- `test1.jpg`, `test2.jpg` - Sample wine label images for testing
-- Real image files are used in tests (no mocks for file operations)
+### Test Infrastructure
+- Custom test runner (`scripts/test-runner.js`) with categorized test execution
+- Comprehensive mocks (`__mocks__/@google/genai.js`, `__mocks__/@vercel/blob.js`)
+- Real image assets (`test-assets/test1.jpg`, `test-assets/test2.jpg`)
+- Test-specific upload directories and cleanup
+- Coverage reporting with detailed HTML reports
 
 ## Core Workflow
 
-When user says "go", follow this process:
-1. Find the next unmarked test in plan.md
-2. Implement the test (Red phase)
-3. Write minimal code to pass the test (Green phase)
-4. Refactor if needed while keeping tests green
-5. Mark the test as completed in plan.md
+## Current Development Status
 
-The plan.md file contains a comprehensive development roadmap with 7 phases:
-1. NAS environment setup and project initialization
-2. Image upload functionality  
-3. OCR text extraction and image classification
-4. Notion database integration
-5. Complete workflow integration
-6. User interface completion
-7. E2E testing and deployment
+The application is now in production (v1.0.7) with the following completed features:
+- ✅ Mobile-first responsive UI with camera integration
+- ✅ Multiple image upload and batch processing
+- ✅ AI-powered image classification and OCR
+- ✅ Structured data extraction with Gemini
+- ✅ Edit workflow for manual corrections
+- ✅ Notion database integration with batch operations
+- ✅ Vercel Blob storage with cleanup
+- ✅ Comprehensive test suite and performance monitoring
+- ✅ Production deployment with error handling
+
+### Active Development Areas
+- Re-submission functionality for failed processing
+- Advanced caching strategies for Vision API
+- Enhanced mobile UX improvements
+- Cost optimization for API usage
 
 ## API Response Formats
 
@@ -223,29 +246,49 @@ The plan.md file contains a comprehensive development roadmap with 7 phases:
 
 ## Deployment Notes
 
-### Vercel Deployment
-- Automatic deployment on push to main branch
-- Environment variables set in Vercel dashboard
-- Uses Vercel Blob for image storage
-- Serverless functions with 10s timeout (can be increased)
+### Vercel Deployment (Primary)
+- Automatic deployment on push to master branch (current: vercel branch)
+- Environment variables configured in Vercel dashboard
+- Vercel Blob storage for images with automatic cleanup
+- Serverless functions optimized for mobile API usage
+- Recent commits focus on re-submission functionality and Gemini prompt optimization
 
-### NAS Deployment
-- Manual deployment using `npm run deploy`
-- PM2 for process management
-- Local filesystem for image storage
-- Configurable ports and paths in `ecosystem.config.js`
+### Legacy NAS Support
+- Deployment scripts maintained for compatibility
+- Local filesystem fallback available
+- PM2 configuration preserved in deployment folder
 
-## Development Tools and Libraries
+## Key Libraries and Tools
 
-- Use shadcn ui for UI components
-- Formidable for file upload handling
-- Sharp for image optimization
-- Winston for logging (file + console)
-- Node-cache for in-memory caching
+- **UI Framework**: React with TypeScript, mobile-first responsive design
+- **File Handling**: Formidable v3.5.1 with multipart support
+- **Image Processing**: Sharp v0.32.6 for optimization
+- **Caching**: Node-cache v5.1.2 with memory management
+- **Testing**: Custom test runner with Jest and Playwright
+- **AI APIs**: Structured output with Google Gemini, Vision API caching
+- **Storage**: Vercel Blob with automatic cleanup mechanisms
 
-# TEST ENVIRONMENT CONSIDERATIONS
+# CURRENT PROJECT STATUS
 
-- Do not use mock data in test environments
-- When testing, use files similar to actual files
-  - In this project, test1.jpg and test2.jpg are the test files used to simulate real images
-- Never use mock data. if you need real data, just ask me.
+## Production Application
+The Wine Tracker is a fully functional production app deployed on Vercel with:
+- Mobile-optimized interface for wine label and receipt processing
+- Real-time AI analysis with progress feedback
+- Edit capabilities for manual corrections
+- Automatic Notion database integration
+- Batch processing support for multiple images
+
+## Test Environment
+- Comprehensive test coverage with real image assets
+- Mock system for API services during testing
+- Performance tests for Vision API caching
+- E2E testing with Playwright for full workflow validation
+- Use `test-assets/test1.jpg` and `test-assets/test2.jpg` for testing
+
+## Development Guidelines
+- Follow mobile-first responsive design principles
+- Maintain environment-aware configuration
+- Use structured AI outputs with proper error handling
+- Implement proper caching for API cost management
+- Ensure all changes maintain backward compatibility
+- Always run full test suite before significant changes

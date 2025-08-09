@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import WineProcessingWorkflow from '../components/WineProcessingWorkflow';
+import WineProcessingWorkflow from '../components/workflows/WineProcessingWorkflow';
 import { NotionWineProperties } from '../lib/notion-schema';
 
 const TestEditWorkflow: React.FC = () => {
