@@ -63,72 +63,14 @@ interface ConfirmationData {
 }
 
 export default function MainPage() {
-  // Single image mode (backward compatibility)
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<ImageType>('wine_label');
-  const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
-  const [confirmationData, setConfirmationData] = useState<ConfirmationData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string>('');
-  const [autoDetected, setAutoDetected] = useState<any>(null);
-  
-  // Multiple images mode (default)
-  const [multipleMode, setMultipleMode] = useState(true);
+  // Multiple images mode (only mode)
   const [processingItems, setProcessingItems] = useState<ImageProcessingItem[]>([]);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>('');
 
   const handleImageUpload = async (files: File[]) => {
-    if (multipleMode) {
-      // Multiple mode (default) - handle all files through multiple upload
-      handleMultipleImageUpload(files);
-    } else {
-      // Single file mode - maintain backward compatibility
-      const file = files[0];
-      setLoading(true);
-      setError('');
-      
-      try {
-        // Upload to Vercel Blob or NAS based on environment
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const uploadResponse = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        
-        const uploadResult = await uploadResponse.json();
-        
-        if (!uploadResult.success) {
-          throw new Error(uploadResult.error || 'Upload failed');
-        }
-        
-        // Store the file object and upload result
-        setUploadedFile(file);
-        
-        // For Vercel Blob, use the returned URL; for local, create object URL
-        const imageUrl = uploadResult.url || URL.createObjectURL(file);
-        setUploadedImageUrl(imageUrl);
-        
-        // Reset state for new upload
-        setSelectedType('wine_label'); // Auto-select wine_label since UI is simplified
-        setProcessedData(null);
-        setConfirmationData(null);
-        setLoading(false);
-        setSuccess(false);
-        setError('');
-        setAutoDetected(null);
-        
-        console.log('File uploaded successfully:', uploadResult);
-        
-      } catch (error) {
-        setLoading(false);
-        setError(`업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
-        console.error('Upload error:', error);
-      }
-    }
+    handleMultipleImageUpload(files);
   };
 
   const handleMultipleImageUpload = async (files: File[]) => {
@@ -648,150 +590,6 @@ export default function MainPage() {
   };
 
 
-  const handleTypeSelection = (type: ImageType) => {
-    setSelectedType(type);
-  };
-
-  const handleAnalysis = () => {
-    if (selectedType) {
-      processImage(selectedType);
-    }
-  };
-
-  const processImage = async (type: ImageType) => {
-    if (!uploadedFile && !uploadedImageUrl) return;
-    
-    setLoading(true);
-    setError('');
-
-    console.log('🚀 [CLIENT] Starting image analysis...');
-    console.log('   Image type:', type);
-    console.log('   Using Gemini: true');
-    console.log('   Skip Notion: true');
-
-    try {
-      let response;
-      
-      // Check if we're in Vercel environment and have a blob URL
-      if (uploadedImageUrl && uploadedImageUrl.startsWith('https://')) {
-        console.log('🌐 [CLIENT] Using URL-based processing (Vercel Blob)');
-        console.log('   Image URL:', uploadedImageUrl);
-        
-        // Use URL-based processing (Vercel Blob)
-        response = await fetch('/api/process', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            imageUrl: uploadedImageUrl,
-            type: type,
-            useGemini: 'true',
-            skipNotion: 'true'
-          }),
-        });
-      } else {
-        console.log('📁 [CLIENT] Using form data processing (local file)');
-        console.log('   File name:', uploadedFile?.name);
-        console.log('   File size:', uploadedFile?.size, 'bytes');
-        
-        // Use form data processing (local file system)
-        const formData = new FormData();
-        formData.append('image', uploadedFile!);
-        formData.append('type', type);
-        formData.append('useGemini', 'true');
-        formData.append('skipNotion', 'true');
-
-        response = await fetch('/api/process', {
-          method: 'POST',
-          body: formData,
-        });
-      }
-
-      console.log('📡 [CLIENT] API request sent, waiting for response...');
-
-      const result = await response.json();
-
-      console.log('📨 [CLIENT] Received response from API');
-      console.log('   Status:', response.status);
-      console.log('   Success:', result.success);
-
-      if (response.ok && result.success) {
-        console.log('✅ [CLIENT] Analysis completed successfully!');
-        console.log('   Detected type:', result.data.type);
-        console.log('   Has extracted data:', !!result.data.extractedData);
-        
-        // Show confirmation data instead of immediately saving to Notion
-        setConfirmationData({
-          type: result.data.type,
-          extractedData: result.data.extractedData,
-          savedImagePath: result.data.savedImagePath
-        });
-      } else {
-        console.error('❌ [CLIENT] Analysis failed:', result.error);
-        setError(result.error || '처리 중 오류가 발생했습니다');
-      }
-    } catch (err) {
-      console.error('❌ [CLIENT] Request failed:', err);
-      setError('처리 중 오류가 발생했습니다');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveToNotion = async () => {
-    if (!confirmationData) return;
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/notion', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: confirmationData.type === 'wine_label' ? 'save_wine' : 'save_receipt',
-          data: confirmationData.extractedData,
-          source: confirmationData.type
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        setProcessedData({
-          type: confirmationData.type,
-          extractedData: confirmationData.extractedData,
-          savedImagePath: confirmationData.savedImagePath,
-          notionResult: result.result
-        });
-        setSuccess(true);
-        setConfirmationData(null); // Clear confirmation data after saving
-      } else {
-        setError(result.error || result.details || '저장 중 오류가 발생했습니다');
-      }
-    } catch (err) {
-      setError('저장 중 오류가 발생했습니다');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCancelSave = () => {
-    setConfirmationData(null);
-    setError('');
-  };
-
-  const handleEditData = (editedData: any) => {
-    if (confirmationData) {
-      setConfirmationData({
-        ...confirmationData,
-        extractedData: editedData
-      });
-    }
-  };
 
   const handleSaveAll = async (completedItems: ImageProcessingItem[]) => {
     if (completedItems.length === 0) return;
@@ -1017,29 +815,13 @@ export default function MainPage() {
               <div data-testid="upload-area">
                 <ImageUpload 
                   onUpload={handleImageUpload} 
-                  multiple={multipleMode}
+                  multiple={true}
                 />
-                
-                {/* Mode toggle button */}
-                <div className="mt-4 text-center">
-                  <button
-                    onClick={() => {
-                      setMultipleMode(!multipleMode);
-                      setProcessingItems([]);
-                      setUploadedFile(null);
-                      setUploadedImageUrl('');
-                      setSelectedType('wine_label'); // Reset to default type
-                    }}
-                    className="text-sm text-blue-600 hover:text-blue-800 underline"
-                  >
-                    {multipleMode ? '단일 이미지 모드로 전환' : '다중 이미지 모드로 전환'}
-                  </button>
-                </div>
               </div>
             </ProcessingStep>
 
             {/* Multiple images preview and progress */}
-            {multipleMode && processingItems.length > 0 && (
+            {processingItems.length > 0 && (
               <>
 
                 <ProcessingStep title="📊 분석 진행상황" className="border-l-4 border-l-yellow-500">
@@ -1082,76 +864,7 @@ export default function MainPage() {
               </>
             )}
 
-            {!multipleMode && uploadedImageUrl && (
-              <ProcessingStep title="🚀 와인 분석" className="border-l-4 border-l-orange-500">
-                {/* Hidden type selector - functionality preserved */}
-                <div style={{ display: 'none' }}>
-                  <ImageTypeSelector 
-                    onSelect={handleTypeSelection}
-                    selected={selectedType}
-                    autoDetected={autoDetected}
-                  />
-                </div>
-                
-                {/* Only show analyze button */}
-                <div className="text-center">
-                  <p className="text-gray-600 mb-6">AI가 와인 라벨을 분석하여 정보를 추출합니다.</p>
-                  <button
-                    onClick={handleAnalysis}
-                    disabled={loading}
-                    className="w-full py-4 px-6 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-bold rounded-xl shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transform active:scale-95"
-                  >
-                    {loading ? '🔄 분석 중...' : '🚀 분석하기'}
-                  </button>
-                </div>
-              </ProcessingStep>
-            )}
-
-            {!multipleMode && confirmationData && (
-              <ProcessingStep title="✅ 정보 확인 및 저장" className="border-l-4 border-l-purple-500">
-                <DataConfirmation
-                  type={confirmationData.type}
-                  data={confirmationData.extractedData}
-                  loading={loading}
-                  error={error}
-                  onConfirm={handleSaveToNotion}
-                  onCancel={handleCancelSave}
-                  onEdit={handleEditData}
-                />
-              </ProcessingStep>
-            )}
-
-            {!multipleMode && processedData && !confirmationData && (
-              <ProcessingStep title="🎉 저장 완료!" className="border-l-4 border-l-green-500">
-                <div className="text-center py-6">
-                  <div className="text-6xl mb-4">✅</div>
-                  <h3 className="text-xl font-bold text-green-700 mb-2">Notion에 저장 완료!</h3>
-                  <p className="text-gray-600 mb-6">와인 정보가 성공적으로 저장되었습니다.</p>
-                  <button
-                    onClick={() => {
-                      setUploadedFile(null);
-                      setUploadedImageUrl('');
-                      setSelectedType('wine_label'); // Reset to default instead of null
-                      setProcessedData(null);
-                      setConfirmationData(null);
-                      setSuccess(false);
-                      setError('');
-                    }}
-                    className="w-full py-3 px-6 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors"
-                  >
-                    🔄 새로운 와인 추가하기
-                  </button>
-                </div>
-              </ProcessingStep>
-            )}
-
-            {!multipleMode && loading && !processedData && !confirmationData && (
-              <ProcessingStep title="" className="border-l-4 border-l-blue-500">
-                <LoadingSpinner message="AI가 이미지를 분석하고 있습니다..." />
-              </ProcessingStep>
-            )}
-
-            {error && !processedData && !confirmationData && (
+            {error && (
               <ProcessingStep title="" className="border-l-4 border-l-red-500">
                 <ErrorMessage message={error} />
               </ProcessingStep>
