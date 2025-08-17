@@ -124,6 +124,7 @@ export default function MainPage() {
               }
               
               const result = await uploadResponse.json();
+              console.log(`📦 [CLIENT] Upload API response:`, result);
               if (!result.success) {
                 throw new Error(result.error || 'Upload failed');
               }
