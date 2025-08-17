@@ -137,7 +137,8 @@ export default function MainPage() {
             if (result.status === 'fulfilled') {
               return {
                 success: true,
-                fileUrl: result.value.url || result.value.fileUrl,
+                url: result.value.url || result.value.fileUrl,  // Use 'url' consistently
+                fileUrl: result.value.url || result.value.fileUrl,  // Keep for backward compatibility
                 fileName: result.value.fileName,
                 fileSize: result.value.fileSize
               };
