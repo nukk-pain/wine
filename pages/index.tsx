@@ -521,6 +521,7 @@ export default function MainPage() {
               },
               body: JSON.stringify({
                 imageUrl: item.url,
+                type: 'wine_label',  // 기본값으로 wine_label 설정
                 useGemini: 'true',
                 skipNotion: 'true'
               }),

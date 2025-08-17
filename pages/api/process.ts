@@ -206,7 +206,7 @@ export default async function handler(
     });
 
     let extractedData;
-    let imageType = type as 'wine_label' | 'receipt' | 'auto';
+    let imageType = (type || 'auto') as 'wine_label' | 'receipt' | 'auto';  // type이 없으면 auto로 설정
 
     // Development logging for processing decision
     if (process.env.NODE_ENV === 'development') {
