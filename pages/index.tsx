@@ -124,6 +124,7 @@ export default function MainPage() {
               }
               
               const result = await uploadResponse.json();
+              console.log(`📦 [CLIENT] Upload API response:`, result);
               if (!result.success) {
                 throw new Error(result.error || 'Upload failed');
               }
@@ -134,13 +135,20 @@ export default function MainPage() {
           
           // Convert Promise.allSettled results to upload results format
           const uploadResults = batchResults.map((result, index) => {
+            console.log(`🔍 [CLIENT] Batch result ${index}:`, {
+              status: result.status,
+              hasValue: result.status === 'fulfilled' ? !!result.value : false,
+              valueKeys: result.status === 'fulfilled' ? Object.keys(result.value || {}) : [],
+              url: result.status === 'fulfilled' ? result.value?.url : undefined,
+              fileUrl: result.status === 'fulfilled' ? result.value?.fileUrl : undefined
+            });
             if (result.status === 'fulfilled') {
               return {
                 success: true,
-                url: result.value.url || result.value.fileUrl,  // Use 'url' consistently
-                fileUrl: result.value.url || result.value.fileUrl,  // Keep for backward compatibility
-                fileName: result.value.fileName,
-                fileSize: result.value.fileSize
+                url: result.value.data?.url || result.value.data?.fileUrl,  // data 객체에서 가져오기
+                fileUrl: result.value.data?.url || result.value.data?.fileUrl,
+                fileName: result.value.data?.fileName,
+                fileSize: result.value.data?.fileSize
               };
             } else {
               return {
@@ -180,6 +188,13 @@ export default function MainPage() {
       // Update processing items with final results
       const updatedItems: ImageProcessingItem[] = files.map((file, index) => {
         const result = allResults[index];
+        console.log(`📊 [CLIENT] Processing item ${index}:`, {
+          hasResult: !!result,
+          resultSuccess: result?.success,
+          resultUrl: result?.url,
+          resultFileUrl: result?.fileUrl,
+          finalUrl: result?.success ? (result.url || result.fileUrl) : 'will use blob URL'
+        });
         return {
           id: `${Date.now()}-${index}`,
           file,
@@ -476,6 +491,12 @@ export default function MainPage() {
       }));
       
       console.log('🚀 [CLIENT] Starting batch analysis for', imagesToProcess.length, 'images');
+      console.log('📋 [CLIENT] Images to process:', imagesToProcess.map(img => ({
+        id: img.id,
+        url: img.url,
+        isBlob: img.url?.startsWith('blob:'),
+        isHttps: img.url?.startsWith('https:')
+      })));
       
       // Use individual process API calls instead of batch
       console.log('🚀 [CLIENT] Starting individual analysis for', imagesToProcess.length, 'images');
@@ -500,6 +521,7 @@ export default function MainPage() {
               },
               body: JSON.stringify({
                 imageUrl: item.url,
+                type: 'wine_label',  // 기본값으로 wine_label 설정
                 useGemini: 'true',
                 skipNotion: 'true'
               }),

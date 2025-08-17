@@ -130,10 +130,8 @@ Return a single, clean JSON object. Do not add any text before or after the JSON
         throw new Error('No response from Gemini');
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('📝 [Gemini] Raw response length:', text.length, 'characters');
-        console.log('🔍 [Gemini] Raw response preview:', text.substring(0, 200) + '...');
-      }
+      console.log('📝 [Gemini] Raw response length:', text.length, 'characters');
+      console.log('🔍 [Gemini] Raw response preview:', text.substring(0, 500));
 
       const wineInfo = JSON.parse(text) as WineInfo;
       

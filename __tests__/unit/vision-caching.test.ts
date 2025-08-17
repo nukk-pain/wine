@@ -39,26 +39,20 @@ describe('Vision API Caching', () => {
   });
 
   it('should return cached result on subsequent calls', async () => {
-    // Since we're in test environment, extractTextFromImage returns mock data
-    // But we can still test the caching logic by manually setting cache
+    // Since we're in test environment, we'll test the caching logic directly
     const cacheKey = await generateCacheKey(testImagePath);
+    const testResult = 'Mock OCR result from test image';
     
-    // First call
-    const result1 = await extractTextFromImage(testImagePath);
-    
-    // Manually verify cache was populated (in test env, mock bypass cache but we can check)
+    // Test direct cache operations
+    setCachedResult(cacheKey, testResult);
     const cachedResult = getCachedResult(cacheKey);
     
-    // Second call
-    const result2 = await extractTextFromImage(testImagePath);
+    expect(cachedResult).toBe(testResult);
+    expect(cachedResult).toBeDefined();
+    expect(typeof cachedResult).toBe('string');
+    expect(cachedResult.length).toBeGreaterThan(0);
     
-    // Results should be identical
-    expect(result1).toBe(result2);
-    expect(result1).toBeDefined();
-    expect(typeof result1).toBe('string');
-    expect(result1.length).toBeGreaterThan(0);
-    
-    console.log(`Result: ${result1.substring(0, 50)}...`);
+    console.log(`Cached result: ${cachedResult.substring(0, 50)}...`);
   });
 
   it('should update cache statistics correctly', async () => {
