@@ -180,6 +180,13 @@ export default function MainPage() {
       // Update processing items with final results
       const updatedItems: ImageProcessingItem[] = files.map((file, index) => {
         const result = allResults[index];
+        console.log(`📊 [CLIENT] Processing item ${index}:`, {
+          hasResult: !!result,
+          resultSuccess: result?.success,
+          resultUrl: result?.url,
+          resultFileUrl: result?.fileUrl,
+          finalUrl: result?.success ? (result.url || result.fileUrl) : 'will use blob URL'
+        });
         return {
           id: `${Date.now()}-${index}`,
           file,
