@@ -135,13 +135,20 @@ export default function MainPage() {
           
           // Convert Promise.allSettled results to upload results format
           const uploadResults = batchResults.map((result, index) => {
+            console.log(`🔍 [CLIENT] Batch result ${index}:`, {
+              status: result.status,
+              hasValue: result.status === 'fulfilled' ? !!result.value : false,
+              valueKeys: result.status === 'fulfilled' ? Object.keys(result.value || {}) : [],
+              url: result.status === 'fulfilled' ? result.value?.url : undefined,
+              fileUrl: result.status === 'fulfilled' ? result.value?.fileUrl : undefined
+            });
             if (result.status === 'fulfilled') {
               return {
                 success: true,
-                url: result.value.url || result.value.fileUrl,  // url 필드 추가
-                fileUrl: result.value.url || result.value.fileUrl,
-                fileName: result.value.fileName,
-                fileSize: result.value.fileSize
+                url: result.value.data?.url || result.value.data?.fileUrl,  // data 객체에서 가져오기
+                fileUrl: result.value.data?.url || result.value.data?.fileUrl,
+                fileName: result.value.data?.fileName,
+                fileSize: result.value.data?.fileSize
               };
             } else {
               return {
