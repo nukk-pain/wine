@@ -270,7 +270,16 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
       clientOptions.projectId = config.vision.projectId;
     }
     
-    if (config.vision.keyFilename && fs.existsSync(config.vision.keyFilename)) {
+    // Vercel 환경에서는 환경 변수를 직접 사용
+    if (process.env.VERCEL && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      try {
+        const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+        clientOptions.credentials = credentials;
+      } catch (e) {
+        console.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS:', e);
+        throw new Error('Invalid GOOGLE_APPLICATION_CREDENTIALS format in Vercel environment');
+      }
+    } else if (config.vision.keyFilename && fs.existsSync(config.vision.keyFilename)) {
       clientOptions.keyFilename = config.vision.keyFilename;
     }
     

@@ -182,7 +182,7 @@ export default function MainPage() {
         return {
           id: `${Date.now()}-${index}`,
           file,
-          url: result?.success ? result.fileUrl : URL.createObjectURL(file),
+          url: result?.success ? (result.url || result.fileUrl) : URL.createObjectURL(file),
           status: result?.success ? 'uploaded' : 'error',
           error: result?.success ? undefined : result.error,
           uploadResult: result
