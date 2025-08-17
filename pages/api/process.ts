@@ -266,14 +266,10 @@ export default async function handler(
         // Extract information based on type
         if (imageType === 'wine_label') {
           extractedData = await geminiService.extractWineInfo(imageBuffer, mimeType);
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🍷 [API] Gemini wine data extracted:', JSON.stringify(extractedData, null, 2));
-          }
+          console.log('🍷 [API] Gemini wine data extracted:', JSON.stringify(extractedData, null, 2));
         } else if (imageType === 'receipt') {
           extractedData = await geminiService.extractReceiptInfo(imageBuffer, mimeType);
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🧾 [API] Gemini receipt data extracted:', JSON.stringify(extractedData, null, 2));
-          }
+          console.log('🧾 [API] Gemini receipt data extracted:', JSON.stringify(extractedData, null, 2));
         }
         
         console.log('Gemini processing completed:', { imageType, hasData: !!extractedData });
