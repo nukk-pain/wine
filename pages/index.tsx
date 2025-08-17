@@ -137,6 +137,7 @@ export default function MainPage() {
             if (result.status === 'fulfilled') {
               return {
                 success: true,
+                url: result.value.url || result.value.fileUrl,  // url 필드 추가
                 fileUrl: result.value.url || result.value.fileUrl,
                 fileName: result.value.fileName,
                 fileSize: result.value.fileSize
@@ -182,7 +183,7 @@ export default function MainPage() {
         return {
           id: `${Date.now()}-${index}`,
           file,
-          url: result?.success ? result.fileUrl : URL.createObjectURL(file),
+          url: result?.success ? (result.url || result.fileUrl) : URL.createObjectURL(file),
           status: result?.success ? 'uploaded' : 'error',
           error: result?.success ? undefined : result.error,
           uploadResult: result
@@ -475,6 +476,12 @@ export default function MainPage() {
       }));
       
       console.log('🚀 [CLIENT] Starting batch analysis for', imagesToProcess.length, 'images');
+      console.log('📋 [CLIENT] Images to process:', imagesToProcess.map(img => ({
+        id: img.id,
+        url: img.url,
+        isBlob: img.url?.startsWith('blob:'),
+        isHttps: img.url?.startsWith('https:')
+      })));
       
       // Use individual process API calls instead of batch
       console.log('🚀 [CLIENT] Starting individual analysis for', imagesToProcess.length, 'images');
