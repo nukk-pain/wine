@@ -41,10 +41,13 @@ export class NotionCompatibleParser {
         'Quantity': wineInfo.Quantity || 1, // Default to 1 for wine labels
         'Store': wineInfo.Store || '',
         'Varietal(품종)': wineInfo['Varietal(품종)'] || [],
-        'Image': imageUrl || null
+        'Image': imageUrl || null,
+        'Country(국가)': wineInfo.country || '',
+        'Appellation(원산지명칭)': wineInfo.appellation || '',
+        'Notes(메모)': wineInfo.notes || ''
       };
 
-      // Extract additional context info
+      // Extract additional context info (still kept for backward compatibility)
       const additionalInfo = {
         country: wineInfo.country,
         alcohol_content: wineInfo.alcohol_content,
@@ -166,7 +169,10 @@ export function prepareForNotionSubmission(wineData: NotionWineProperties) {
     'Quantity': wineData.Quantity || 1,
     'Store': wineData.Store?.trim() || '',
     'Varietal(품종)': wineData['Varietal(품종)'] || [],
-    'Image': wineData.Image
+    'Image': wineData.Image,
+    'Country(국가)': wineData['Country(국가)']?.trim() || '',
+    'Appellation(원산지명칭)': wineData['Appellation(원산지명칭)']?.trim() || '',
+    'Notes(메모)': wineData['Notes(메모)']?.trim() || ''
   };
 
   return prepared;

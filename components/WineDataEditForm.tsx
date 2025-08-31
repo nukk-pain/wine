@@ -190,6 +190,48 @@ export default function WineDataEditForm({
           </p>
         </div>
 
+        {/* Country */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Country (국가)
+          </label>
+          <input
+            type="text"
+            value={formData['Country(국가)'] || ''}
+            onChange={(e) => handleInputChange('Country(국가)', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="e.g., France, Italy, USA"
+          />
+        </div>
+
+        {/* Appellation */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Appellation (원산지명칭)
+          </label>
+          <input
+            type="text"
+            value={formData['Appellation(원산지명칭)'] || ''}
+            onChange={(e) => handleInputChange('Appellation(원산지명칭)', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="e.g., Bordeaux AOC, Napa Valley AVA"
+          />
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Notes (메모)
+          </label>
+          <textarea
+            value={formData['Notes(메모)'] || ''}
+            onChange={(e) => handleInputChange('Notes(메모)', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Additional notes about the wine..."
+            rows={3}
+          />
+        </div>
+
         {/* Action Buttons */}
         <div className="flex gap-4 pt-6">
           <button

@@ -11,6 +11,9 @@ export interface NotionWineProperties {
   'Image': string | null;
   'Status'?: string;
   'Purchase date'?: string;
+  'Country(국가)'?: string;
+  'Appellation(원산지명칭)'?: string;
+  'Notes(메모)'?: string;
 }
 
 export interface NotionPropertyMapping {
@@ -81,7 +84,10 @@ export const NOTION_PROPERTY_NAMES = {
   VARIETAL: 'Varietal(품종)',
   IMAGE: 'Image',
   STATUS: 'Status',
-  PURCHASE_DATE: 'Purchase date'
+  PURCHASE_DATE: 'Purchase date',
+  COUNTRY: 'Country(국가)',
+  APPELLATION: 'Appellation(원산지명칭)',
+  NOTES: 'Notes(메모)'
 } as const;
 
 export function mapToNotionProperties(wineData: NotionWineProperties): Record<string, any> {
@@ -172,6 +178,41 @@ export function mapToNotionProperties(wineData: NotionWineProperties): Record<st
           name: 'wine-image',
           external: {
             url: wineData.Image
+          }
+        }
+      ]
+    };
+  }
+
+  // Add new fields: Country, Appellation, Notes
+  if (wineData['Country(국가)']) {
+    properties[NOTION_PROPERTY_NAMES.COUNTRY] = {
+      select: {
+        name: wineData['Country(국가)']
+      }
+    };
+  }
+
+  if (wineData['Appellation(원산지명칭)']) {
+    properties[NOTION_PROPERTY_NAMES.APPELLATION] = {
+      rich_text: [
+        {
+          type: 'text',
+          text: {
+            content: wineData['Appellation(원산지명칭)']
+          }
+        }
+      ]
+    };
+  }
+
+  if (wineData['Notes(메모)']) {
+    properties[NOTION_PROPERTY_NAMES.NOTES] = {
+      rich_text: [
+        {
+          type: 'text',
+          text: {
+            content: wineData['Notes(메모)']
           }
         }
       ]

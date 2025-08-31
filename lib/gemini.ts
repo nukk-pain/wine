@@ -68,6 +68,21 @@ This is the most important instruction.
 * If "appellation" is "Chablis", "Varietal(품종)" must be ["Chardonnay"].
 * If "name" or "region" includes "Chianti Classico", "Varietal(품종)" should include ["Sangiovese"].
 
+### Important Rule for "notes" field
+Extract special designations and production information visible on the label. Focus on:
+1. **Wine tier/classification**: Reserve, Grand Reserve, Gran Reserva, Riserva, Grand Cru, Premier Cru, Estate, Single Vineyard, Old Vines, etc.
+2. **Certifications**: Organic, Biodynamic, Sustainable, Vegan, Natural Wine, etc.
+3. **Production methods**: Barrel aged (with duration), Oak aged, Stainless steel, Unfiltered, Unfined, Hand-harvested, Estate bottled, etc.
+4. **Awards/Medals**: Gold Medal, Silver Medal, 90+ points, Competition awards visible on label
+5. **Special series**: Limited Edition, Special Selection, Winemaker's Reserve, etc.
+
+Format as a brief comma-separated list. If multiple items exist, include the most important ones.
+Examples:
+- "Reserve, 18 months oak aged, Organic certified"
+- "Grand Cru, Estate bottled, Gold Medal 2023"
+- "Single Vineyard, Hand-harvested, Unfiltered"
+- If none of these special designations are visible, return empty string ""
+
 ### JSON Output Structure
 Return a single, clean JSON object. Do not add any text before or after the JSON.
 
@@ -80,12 +95,12 @@ Return a single, clean JSON object. Do not add any text before or after the JSON
   "Store": "store_name_or_empty_string",
   "Varietal(품종)": ["grape1", "grape2"],
   "varietal_reasoning": "State how you found the varietal (e.g., \"Extracted from label\", \"Inferred from Sancerre appellation\")",
-  "country": "country (for reference)",
-  "alcohol_content": "alcohol % (for reference)",
-  "volume": "volume (for reference)",
-  "wine_type": "type (for reference)",
-  "appellation": "appellation (for reference)",
-  "notes": "any other info (for reference)"
+  "country": "country name",
+  "alcohol_content": "alcohol % as string",
+  "volume": "bottle volume (e.g., 750ml)",
+  "wine_type": "Red/White/Rosé/Sparkling/Dessert",
+  "appellation": "official appellation if visible",
+  "notes": "special designations as comma-separated list (see instructions above)"
 }`;
 
       const contents = [

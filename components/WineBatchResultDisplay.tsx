@@ -96,7 +96,10 @@ export function WineBatchResultDisplay({
       'Quantity': extractedData.Quantity || 1,
       'Store': extractedData.Store || '',
       'Varietal(품종)': Array.isArray(extractedData['Varietal(품종)']) ? extractedData['Varietal(품종)'] : (extractedData.varietal ? [extractedData.varietal] : []),
-      'Image': null
+      'Image': null,
+      'Country(국가)': extractedData['Country(국가)'] || extractedData.country || '',
+      'Appellation(원산지명칭)': extractedData['Appellation(원산지명칭)'] || extractedData.appellation || '',
+      'Notes(메모)': extractedData['Notes(메모)'] || extractedData.notes || ''
     };
   };
 

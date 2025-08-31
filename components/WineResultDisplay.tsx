@@ -5,9 +5,12 @@ export interface WineData {
   name: string;
   vintage?: number;
   'Region/Producer'?: string;
-  'Varietal(품종)'?: string;
+  'Varietal(품종)'?: string | string[];
   price?: number;
   quantity?: number;
+  'Country(국가)'?: string;
+  'Appellation(원산지명칭)'?: string;
+  'Notes(메모)'?: string;
 }
 
 export interface ReceiptData {
@@ -53,13 +56,26 @@ export function WineResultDisplay({
           <div className="wine-region">{wineData['Region/Producer']}</div>
         )}
         {wineData['Varietal(품종)'] && (
-          <div className="wine-varietal">{wineData['Varietal(품종)']}</div>
+          <div className="wine-varietal">
+            {Array.isArray(wineData['Varietal(품종)']) 
+              ? wineData['Varietal(품종)'].join(', ')
+              : wineData['Varietal(품종)']}
+          </div>
+        )}
+        {wineData['Country(국가)'] && (
+          <div className="wine-country">{wineData['Country(국가)']}</div>
+        )}
+        {wineData['Appellation(원산지명칭)'] && (
+          <div className="wine-appellation">{wineData['Appellation(원산지명칭)']}</div>
         )}
         {wineData.price && (
           <div className="wine-price">{formatPrice(wineData.price)}</div>
         )}
         {wineData.quantity && (
           <div className="wine-quantity">수량: {wineData.quantity}</div>
+        )}
+        {wineData['Notes(메모)'] && (
+          <div className="wine-notes">{wineData['Notes(메모)']}</div>
         )}
       </div>
     </div>
