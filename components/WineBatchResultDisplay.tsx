@@ -52,6 +52,25 @@ export function WineBatchResultDisplay({
   const [editingState, setEditingState] = useState<EditingState>({});
   const [manualWines, setManualWines] = useState<ManualWineEntry[]>([]);
 
+  // Format price as KRW (₩) with thousands separators
+  const formatKRW = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) return '';
+    let num: number | null = null;
+    if (typeof value === 'number') {
+      num = value;
+    } else if (typeof value === 'string') {
+      const cleaned = value.replace(/[^0-9.-]/g, '');
+      const parsed = parseFloat(cleaned);
+      if (!isNaN(parsed)) num = parsed;
+    }
+    if (num === null) return `₩${String(value)}`;
+    try {
+      return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(num);
+    } catch {
+      return `₩${num.toLocaleString('ko-KR')}`;
+    }
+  };
+
   if (items.length === 0) {
     return null;
   }
@@ -350,7 +369,7 @@ export function WineBatchResultDisplay({
           {(data.Price || data.price) && (
             <div className="flex items-center">
               <span className="text-gray-600 w-24">💰 가격:</span>
-              <span className="text-gray-800 font-medium">${data.Price || data.price}</span>
+              <span className="text-gray-800 font-medium">{formatKRW(data.Price || data.price)}</span>
             </div>
           )}
           {(data.Quantity || data.quantity) && (
