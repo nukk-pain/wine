@@ -2,11 +2,39 @@
 import { Client } from '@notionhq/client';
 import { NotionWineProperties, mapToNotionProperties, validateWineData } from './notion-schema';
 
+// Use the 2025-09-03 API version to enable data sources
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
+  notionVersion: '2025-09-03'
 });
 
 const DATABASE_ID = process.env.NOTION_DATABASE_ID || '23638693-94a5-804f-aa3d-f64f826a2eab';
+const ENV_DATA_SOURCE_ID = process.env.NOTION_DATA_SOURCE_ID;
+
+let cachedDataSourceId: string | null = ENV_DATA_SOURCE_ID || null;
+
+async function resolveDataSourceId(): Promise<string> {
+  if (cachedDataSourceId) return cachedDataSourceId;
+
+  try {
+    const db: any = await notion.databases.retrieve({ database_id: DATABASE_ID });
+    const firstDataSourceId: string | undefined = db?.data_sources?.[0]?.id;
+    if (!firstDataSourceId) {
+      throw new Error('No data_sources found on database');
+    }
+    cachedDataSourceId = firstDataSourceId;
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 [NOTION] Resolved data_source_id:', cachedDataSourceId);
+    }
+    return cachedDataSourceId;
+  } catch (e) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('⚠️ [NOTION] Failed to resolve data_source_id, will fallback to database_id. Error:', e);
+    }
+    // As a safe fallback, return an empty string to signal caller to fallback
+    return '';
+  }
+}
 
 // Legacy interface for backwards compatibility
 export interface WineData {
@@ -53,12 +81,20 @@ export async function saveWineToNotionV2(wineData: NotionWineProperties): Promis
   }
 
   try {
+    // Prefer creating the page under a data source parent
+    let parent: any;
+    const dataSourceId = await resolveDataSourceId();
+    if (dataSourceId) {
+      parent = { type: 'data_source_id', data_source_id: dataSourceId } as any;
+    } else {
+      // Fallback to database_id for compatibility
+      parent = { database_id: DATABASE_ID } as any;
+    }
+
     const response = await notion.pages.create({
-      parent: {
-        database_id: DATABASE_ID
-      },
+      parent,
       properties
-    });
+    } as any);
 
     if (process.env.NODE_ENV === 'development') {
       console.log('✅ [NOTION] Successfully created page:', response.id);

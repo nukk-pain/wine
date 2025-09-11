@@ -40,6 +40,7 @@ Vercel 대시보드에서 다음 환경 변수를 설정하세요:
 |----------|------|------|
 | `NOTION_API_KEY` | Notion Integration API 키 | ✅ |
 | `NOTION_DATABASE_ID` | Notion 데이터베이스 ID | ✅ |
+| `NOTION_DATA_SOURCE_ID` | (선택) 2025-09-03 버전의 데이터 소스 ID. 설정 시 데이터 소스 부모로 페이지 생성 | ❌ |
 | `GEMINI_API_KEY` | Google Gemini API 키 | ✅ |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Google Vision API 서비스 계정 JSON (전체 내용) | ✅ |
 
@@ -122,6 +123,8 @@ GOOGLE_APPLICATION_CREDENTIALS={"type":"service_account",...}
 # Notion API
 NOTION_API_KEY=your-notion-api-key
 NOTION_DATABASE_ID=your-database-id
+# 선택: 데이터 소스 ID가 고정되어 있다면 설정하세요
+# NOTION_DATA_SOURCE_ID=your-data-source-id
 ```
 
 ### 개발 명령어
