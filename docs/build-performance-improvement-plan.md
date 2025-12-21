@@ -12,6 +12,7 @@
 
 > [!IMPORTANT]
 > 각 단계는 **검증 → 개선 → 테스트** 사이클을 따르며, 이전 단계 완료 후 다음 단계 진행을 권장합니다.
+> 특히 주니어 개발자는 각 단계의 **[Senior Developer's Advisory]** 섹션을 반드시 숙지하십시오.
 
 ---
 
@@ -30,6 +31,11 @@
 
 > [!TIP]
 > 이 단계는 코드 변경이 최소화되며 즉각적인 효과를 기대할 수 있습니다.
+
+> [!CAUTION]
+> **Senior Developer's Advisory (Phase 1):**
+> 1. **재시작 필수**: `next.config.js`나 `tsconfig.json` 수정 후에는 반드시 개발 서버를 재시작해야 반영됩니다.
+> 2. **타입 에러 주의**: `tsconfig.json`의 `exclude`에 필요한 폴더(예: `types`, `lib`)가 포함되지 않도록 주의하세요. 수정 후 즉시 `npm run type-check`를 수행하십시오.
 
 ### 1.1 Next.js Config 최적화
 
@@ -135,12 +141,23 @@ components/
 - HMR 속도 30-50% 개선
 - 빌드 시 병렬 처리 효율 증가
 
+> [!IMPORTANT]
+> **컴포넌트 분리 가이드 (For Juniors):**
+> - **Hook 먼저**: 분리 전 로직을 `custom hook`으로 먼저 추출하면 의존 파악이 쉽습니다.
+> - **Props Drilling 방지**: 3단계 이상의 깊은 Props 전달이 예상되면 Context API나 상태 관리 라이브러리 도입을 검토하세요.
+> - **순환 참조 주의**: `A <-> B` 상호 참조가 발생하지 않도록 폴더 구조를 설계하세요.
+
 ---
 
 ## Phase 2: Version Alignment (2-3 Days)
 
 > [!CAUTION]
 > React 19 업그레이드는 Breaking Changes가 있으므로 충분한 테스트가 필요합니다.
+
+> [!WARNING]
+> **Senior Developer's Advisory (Phase 2):**
+> 1. **No `--force`**: 의존성 충돌 시 `--force`를 쓰지 말고, 어떤 라이브러리가 React 19를 지원하지 않는지 분석하여 대응하세요.
+> 2. **Hydration 에러**: React 19는 서버-클라이언트 불일치에 엄격합니다. 브라우저 콘솔의 Hydration 경고를 무시하지 마십시오.
 
 ### 2.1 React 19 Upgrade
 
@@ -241,6 +258,10 @@ const getGeminiClient = async () => {
 - Gemini API → 별도 서버리스 함수
 - **현재 규모에서는 오버엔지니어링 가능성 높음**
 
+> [!CAUTION]
+> **Senior Developer's Advisory (Phase 3):**
+> - **Context Check**: `next/dynamic` 사용 시 클라이언트 전용 라이브러리를 서버에서 불러오지 않도록 `{ ssr: false }` 옵션 등을 적절히 활용하세요.
+
 ---
 
 ## Verification Plan
@@ -267,6 +288,12 @@ Measure-Command { npm run build }
 Measure-Command { npm run type-check }
 ```
 
+### Cold Build 측정 프로토콜
+정확한 성능 측정을 위해 아래 절차를 준수하세요:
+1. `.next` 및 `node_modules/.cache` 폴더 삭제
+2. 백그라운드 프로세스 최소화
+3. **최소 3회 반복 측정 후 평균값** 기록 (캐시에 의한 일시적 성성 향상 방지)
+
 ---
 
 ## Risk Assessment
@@ -274,8 +301,11 @@ Measure-Command { npm run type-check }
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
 | React 19 호환성 이슈 | Medium | High | 충분한 테스트, 별도 브랜치 작업 |
-| 컴포넌트 분리 시 버그 | Low | Medium | 단위 테스트 추가, 점진적 분리 |
+| 컴포넌트 분리 시 버그 | Low | Medium | 단위 테스트 추가, 점진적 분리, Hook 추출 선진행 |
 | CI 캐시 무효화 | Low | Low | 캐시 키 전략 최적화 |
+| 의존성 충돌 시 강제 설치 | Medium | High | `--force` 사용 금지 가이드, Peer Deps 분석 |
+| 순환 참조 및 빌드 에러 | Low | Medium | 컴포넌트 설계 리뷰, `index.ts` 활용 최적화 |
+| 잘못된 성능 수치 보고 | Medium | Low | Cold Build 프로토콜 준수 (3회 측정) |
 
 ---
 
@@ -312,3 +342,4 @@ gantt
 | Date | Version | Author | Changes |
 |------|---------|--------|---------|
 | 2025-12-21 | 1.0 | Agent | 초기 계획 문서 작성 |
+| 2025-12-21 | 1.1 | Agent | 시니어 개발자 피드백 및 리스크 가이드 추가 |

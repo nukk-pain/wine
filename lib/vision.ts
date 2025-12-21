@@ -36,14 +36,14 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
       console.log('Starting OCR text extraction:', { requestId });
     }
     const extractedText = await extractTextFromImage(imageUrl);
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log('OCR completed:', {
-        requestId,
-        textLength: extractedText.length,
-        hasText: extractedText.length > 0
-      });
-    }
+
+    console.log('OCR extraction completed:', {
+      requestId,
+      textLength: extractedText.length,
+      hasText: extractedText.length > 0,
+      textPreview: extractedText.substring(0, 200),
+      textSample: extractedText.split('\n').slice(0, 5).join(' | ')
+    });
     
     // 2. 이미지 타입 분류
     if (process.env.NODE_ENV === 'development') {
@@ -249,7 +249,7 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
       
       if (cachedResult !== undefined) {
         const processingTime = Date.now() - startTime;
-        
+
         console.log('Vision API cache hit:', {
           requestId,
           imageUrl: maskSensitiveData(imageUrl),
@@ -258,7 +258,14 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
           processingTime,
           cached: true
         });
-        
+
+        console.log('Vision API cached text:', {
+          requestId,
+          textPreview: cachedResult.substring(0, 500),
+          fullTextLength: cachedResult.length,
+          hasContent: cachedResult.trim().length > 0
+        });
+
         return cachedResult;
       }
     }
@@ -335,7 +342,15 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
       cacheEnabled: isServiceEnabled('cache'),
       cacheStats
     });
-    
+
+    // 11. 추출된 텍스트 내용 로깅 (디버깅용)
+    console.log('Vision API extracted text:', {
+      requestId,
+      textPreview: extractedText.substring(0, 500),
+      fullTextLength: extractedText.length,
+      hasContent: extractedText.trim().length > 0
+    });
+
     return extractedText;
       
   } catch (error: any) {
