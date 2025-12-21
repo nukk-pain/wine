@@ -48,21 +48,23 @@ export async function saveWineToSheets(data: NotionWineProperties): Promise<{ id
     const sheets = await getGoogleSheetsClient();
 
     // Map NotionWineProperties to Sheet Row Array
-    // Headers: Name, Vintage, Region/Producer, Varietal, Price, Quantity, Store, Purchase Date, Status, Country, Appellation, Notes
+    // Headers: Name, Vintage, Producer, Country, Region, Appellation, Varietal, Price, Quantity, Store, Purchase Date, Status, Notes
+    // Columns: A, B, C, D, E, F, G, H, I, J, K, L, M (13 columns)
 
     const row = [
         data.Name,
         data.Vintage || '',
-        data['Region/Producer'] || '',
-        (data['Varietal(품종)'] || []).join(', '),
-        data.Price || '',
-        data.Quantity || 1,
-        data.Store || '',
-        data['Purchase date'] || new Date().toISOString().split('T')[0],
-        data.Status || 'In Stock',
-        data['Country(국가)'] || '',
-        data['Appellation(원산지명칭)'] || '',
-        data['Notes(메모)'] || ''
+        data.Producer || '',                                    // C: Producer
+        data['Country(국가)'] || '',                             // D: Country (Moved up)
+        data.Region || '',                                      // E: Region
+        data['Appellation(원산지명칭)'] || '',                     // F: Appellation
+        (data['Varietal(품종)'] || []).join(', '),              // G: Varietal
+        data.Price || '',                                       // H: Price
+        data.Quantity || 1,                                     // I: Quantity
+        data.Store || '',                                       // J: Store
+        data['Purchase date'] || new Date().toISOString().split('T')[0], // K: Purchase Date
+        data.Status || 'In Stock',                              // L: Status
+        data['Notes(메모)'] || ''                                // M: Notes
     ];
 
     if (process.env.NODE_ENV === 'development') {
@@ -72,7 +74,7 @@ export async function saveWineToSheets(data: NotionWineProperties): Promise<{ id
     try {
         const response = await sheets.spreadsheets.values.append({
             spreadsheetId: GOOGLE_SHEET_ID,
-            range: 'WineList!A:L', // 12 columns: Name to Notes
+            range: 'WineList!A:M', // 13 columns: Name to Notes (Producer, Region 분리)
             valueInputOption: 'USER_ENTERED',
             insertDataOption: 'INSERT_ROWS', // Ensure new rows are inserted
             requestBody: {
@@ -106,7 +108,8 @@ export async function saveReceiptToSheets(receiptData: ReceiptData): Promise<any
         const wineData: NotionWineProperties = {
             'Name': item.name,
             'Vintage': item.vintage || null,
-            'Region/Producer': '', // Not usually on receipt
+            'Producer': '',            // Not usually on receipt
+            'Region': '',              // Not usually on receipt
             'Price': item.price,
             'Quantity': item.quantity,
             'Store': receiptData.store,

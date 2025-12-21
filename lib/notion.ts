@@ -40,7 +40,8 @@ async function resolveDataSourceId(): Promise<string> {
 export interface WineData {
   name: string;
   vintage?: number;
-  'Region/Producer'?: string;
+  producer?: string;               // C: 생산자 (분리)
+  region?: string;                 // D: 지역 (분리)
   'Varietal(품종)'?: string;
   price?: number;
   quantity?: number;
@@ -135,7 +136,8 @@ export async function saveWineToNotion(wineData: WineData, source: 'wine_label' 
   const notionData: NotionWineProperties = {
     'Name': wineData.name || 'Unknown Wine',
     'Vintage': wineData.vintage || null,
-    'Region/Producer': wineData['Region/Producer'] || '',
+    'Producer': wineData.producer || '',             // C: 생산자 (분리)
+    'Region': wineData.region || '',                 // D: 지역 (분리)
     'Price': wineData.price || null,
     'Quantity': wineData.quantity || null,
     'Store': wineData.Store || '',

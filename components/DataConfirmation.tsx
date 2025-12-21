@@ -58,9 +58,14 @@ const WineDataDisplay = ({
       onChange={isEditing ? (value) => onChange?.('Name', value) : undefined}
     />
     <DataField
-      label="지역/생산자"
-      value={data['Region/Producer']}
-      onChange={isEditing ? (value) => onChange?.('Region/Producer', value) : undefined}
+      label="생산자"
+      value={data.Producer}
+      onChange={isEditing ? (value) => onChange?.('Producer', value) : undefined}
+    />
+    <DataField
+      label="지역"
+      value={data.Region}
+      onChange={isEditing ? (value) => onChange?.('Region', value) : undefined}
     />
     <DataField
       label="빈티지 (년도)"

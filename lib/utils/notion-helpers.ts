@@ -4,7 +4,8 @@ export type { NotionWineProperties };
 export const NOTION_PROPERTY_NAMES = {
     NAME: 'Name',
     VINTAGE: 'Vintage',
-    REGION_PRODUCER: 'Region/Producer',
+    PRODUCER: 'Producer',             // C: 생산자 (분리)
+    REGION: 'Region',                 // D: 지역 (분리)
     PRICE: 'Price',
     QUANTITY: 'Quantity',
     STORE: 'Store',
@@ -24,7 +25,8 @@ export const convertToNotionFormat = (extractedData: any): NotionWineProperties 
     return {
         'Name': extractedData.Name || extractedData.wine_name || '',
         'Vintage': extractedData.Vintage || extractedData.vintage ? parseInt(extractedData.Vintage || extractedData.vintage) : null,
-        'Region/Producer': extractedData['Region/Producer'] || [extractedData.region, extractedData.producer].filter(Boolean).join(', ') || '',
+        'Producer': extractedData.Producer || extractedData.producer || '',     // C: 생산자 (분리)
+        'Region': extractedData.Region || extractedData.region || '',           // D: 지역 (분리)
         'Price': extractedData.Price || extractedData.price ? parseFloat(extractedData.Price || extractedData.price) : null,
         'Quantity': extractedData.Quantity || 1,
         'Store': extractedData.Store || '',
@@ -62,13 +64,26 @@ export function mapToNotionProperties(wineData: NotionWineProperties): Record<st
         };
     }
 
-    if (wineData['Region/Producer']) {
-        properties[NOTION_PROPERTY_NAMES.REGION_PRODUCER] = {
+    if (wineData.Producer) {
+        properties[NOTION_PROPERTY_NAMES.PRODUCER] = {
             rich_text: [
                 {
                     type: 'text',
                     text: {
-                        content: wineData['Region/Producer']
+                        content: wineData.Producer
+                    }
+                }
+            ]
+        };
+    }
+
+    if (wineData.Region) {
+        properties[NOTION_PROPERTY_NAMES.REGION] = {
+            rich_text: [
+                {
+                    type: 'text',
+                    text: {
+                        content: wineData.Region
                     }
                 }
             ]
@@ -212,8 +227,12 @@ export function validateWineData(data: Partial<NotionWineProperties>): {
         errors.push('Quantity must be a positive number');
     }
 
-    if (data['Region/Producer'] && data['Region/Producer'].length > 2000) {
-        errors.push('Region/Producer is too long (max 2000 characters)');
+    if (data.Producer && data.Producer.length > 2000) {
+        errors.push('Producer is too long (max 2000 characters)');
+    }
+
+    if (data.Region && data.Region.length > 2000) {
+        errors.push('Region is too long (max 2000 characters)');
     }
 
     if (data.Store && data.Store.length > 2000) {

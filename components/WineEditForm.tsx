@@ -18,7 +18,8 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
     const normalizedData: NotionWineProperties = {
         Name: initialData.Name || '',
         Vintage: initialData.Vintage || null,
-        'Region/Producer': initialData['Region/Producer'] || '',
+        Producer: initialData.Producer || '',           // C: 생산자 (분리)
+        Region: initialData.Region || '',               // D: 지역 (분리)
         Price: initialData.Price || null,
         Quantity: initialData.Quantity || null,
         Store: initialData.Store || '',
@@ -137,19 +138,34 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
                 </div>
             </div>
 
-            {/* Region/Producer */}
-            <div>
-                <label className="block text-xs font-body font-medium text-wine-creamDim mb-1">
-                    지역/생산자
-                </label>
-                <input
-                    type="text"
-                    value={editedData['Region/Producer']}
-                    onChange={(e) => handleChange('Region/Producer', e.target.value)}
-                    className="w-full px-3 py-2 bg-wine-dark/30 border border-wine-glassBorder rounded-lg text-sm text-wine-cream placeholder:text-wine-creamDark focus:outline-none focus:ring-2 focus:ring-wine-gold/50"
-                    placeholder="예: 나파 밸리, 보르도"
-                    disabled={isSubmitting}
-                />
+            {/* Producer and Region */}
+            <div className="grid grid-cols-2 gap-2">
+                <div>
+                    <label className="block text-xs font-body font-medium text-wine-creamDim mb-1">
+                        생산자
+                    </label>
+                    <input
+                        type="text"
+                        value={editedData.Producer}
+                        onChange={(e) => handleChange('Producer', e.target.value)}
+                        className="w-full px-3 py-2 bg-wine-dark/30 border border-wine-glassBorder rounded-lg text-sm text-wine-cream placeholder:text-wine-creamDark focus:outline-none focus:ring-2 focus:ring-wine-gold/50"
+                        placeholder="예: Château Margaux"
+                        disabled={isSubmitting}
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-body font-medium text-wine-creamDim mb-1">
+                        지역
+                    </label>
+                    <input
+                        type="text"
+                        value={editedData.Region}
+                        onChange={(e) => handleChange('Region', e.target.value)}
+                        className="w-full px-3 py-2 bg-wine-dark/30 border border-wine-glassBorder rounded-lg text-sm text-wine-cream placeholder:text-wine-creamDark focus:outline-none focus:ring-2 focus:ring-wine-gold/50"
+                        placeholder="예: Napa Valley, Bordeaux"
+                        disabled={isSubmitting}
+                    />
+                </div>
             </div>
 
             {/* Varietal and Store */}

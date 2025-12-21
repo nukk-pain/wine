@@ -3,165 +3,134 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import fs from 'fs/promises';
 import path from 'path';
-import { processWineImage } from '@/lib/vision';
-import { geminiService } from '@/lib/gemini';
-import { createFormidableConfig, parseFormidableError, getTempDir } from '@/lib/formidable-config';
-import { createApiHandler, sendSuccess, sendError } from '@/lib/api-utils';
-import { getConfig } from '@/lib/config';
-
-// Get configuration
-const appConfig = getConfig();
-
-// Image storage path - use unified config
-const WINE_PHOTOS_DIR = path.join(process.cwd(), 'public', 'wine-photos');
+import { geminiService, mapToFrontendFormat } from '@/lib/gemini';
+import { createFormidableConfig } from '@/lib/formidable-config';
+import { sendSuccess, sendError } from '@/lib/api-utils';
 
 export const config = {
   api: {
-    bodyParser: false, // Handle multipart/form-data manually
+    bodyParser: false, // Multipart/JSON handled manually
   },
 };
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'POST') {
-    return sendError(res, 'Method not allowed', 405);
-  }
+const WINE_PHOTOS_DIR = path.join(process.cwd(), 'public', 'wine-photos');
+const MAX_CONCURRENT = 3;
+
+interface ImageRequest {
+  id: string;
+  url?: string;
+  buffer?: Buffer;
+  mimeType?: string;
+  type?: 'wine_label' | 'receipt' | 'auto';
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') return sendError(res, 'Method not allowed', 405);
 
   try {
-    let imageFile: any = null;
-    let imageUrl: string | null = null;
-    let type: string | undefined;
-    let useGemini: string | undefined;
-
     const contentType = req.headers['content-type'] || '';
+    let imageRequests: ImageRequest[] = [];
 
-    // Parse Request
     if (contentType.includes('application/json')) {
-      // Manual JSON parsing
-      const rawBody = await readRequestBody(req);
-      if (!rawBody || rawBody.trim() === '') {
-        return sendError(res, 'Empty request body', 400);
+      // Case 1: JSON Body (Single URL or Batch URLs)
+      const body = JSON.parse(await readRequestBody(req));
+      const images = body.images || (body.imageUrl ? [{ id: 'single', url: body.imageUrl, type: body.type }] : []);
+
+      for (const img of images) {
+        const { buffer, mimeType } = await resolveImageSource(img.url);
+        imageRequests.push({ ...img, buffer, mimeType });
       }
-
-      let body;
-      try {
-        body = JSON.parse(rawBody);
-      } catch (e) {
-        return sendError(res, 'Invalid JSON', 400);
-      }
-
-      imageUrl = body.imageUrl;
-      type = body.type;
-      useGemini = body.useGemini;
-
-      if (!imageUrl) {
-        return sendError(res, 'No imageUrl provided', 400);
-      }
-
     } else {
-      // Multipart Form Data
-      const uploadDir = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'tmp');
+      // Case 2: Multipart Form Data (Single file upload)
+      const uploadDir = path.join(process.cwd(), 'tmp');
       await fs.mkdir(uploadDir, { recursive: true }).catch(() => { });
-
       const form = formidable(createFormidableConfig({ uploadDir }));
 
-      const [fields, files] = await new Promise<[formidable.Fields, formidable.Files]>((resolve, reject) => {
+      const [fields, files]: [any, any] = await new Promise((resolve, reject) => {
         form.parse(req, (err, fields, files) => {
-          if (err) reject(err);
-          else resolve([fields, files]);
+          if (err) reject(err); else resolve([fields, files]);
         });
       });
 
-      imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
-      type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
-      useGemini = Array.isArray(fields.useGemini) ? fields.useGemini[0] : fields.useGemini;
-
-      if (!imageFile) {
-        return sendError(res, 'No image file provided', 400);
+      const file = Array.isArray(files.image) ? files.image[0] : files.image;
+      if (file) {
+        const savedPath = await saveImagePermanently(file);
+        const buffer = await fs.readFile(file.filepath);
+        imageRequests.push({
+          id: 'upload',
+          buffer,
+          mimeType: file.mimetype || 'image/jpeg',
+          url: savedPath,
+          type: fields.type?.[0] || 'wine_label'
+        });
+        await fs.unlink(file.filepath).catch(() => { });
       }
     }
 
-    // Determine Image Type
-    let extractedData;
-    let imageType = (type || 'auto') as 'wine_label' | 'receipt' | 'auto';
+    if (imageRequests.length === 0) return sendError(res, 'No image data provided', 400);
 
-    //  CRITICAL FIX: Use PERMANENT file for processing to avoid race condition
-    // Background cleanup scripts may delete tmp files during processing
-    let processingImagePath: string;
-    let savedImagePath: string | null = null;
-
-    if (imageFile) {
-      // Save permanently (without deleting original yet)
-      if (!process.env.VERCEL) {
-        savedImagePath = await saveImagePermanently(imageFile, false);
-        // CRITICAL: Use the SAFE permanent file for Vision API
-        // savedImagePath is like "/wine-photos/xxx.jpg", we need absolute local path
-        processingImagePath = path.join(process.cwd(), 'public', savedImagePath.replace(/^\//, ''));
-      } else {
-        processingImagePath = imageFile.filepath;
-      }
-    } else {
-      processingImagePath = imageUrl!; // Non-null assertion: imageUrl is guaranteed to exist here
-      savedImagePath = imageUrl;
+    // Process all requests in batches
+    const results = [];
+    for (let i = 0; i < imageRequests.length; i += MAX_CONCURRENT) {
+      const batch = imageRequests.slice(i, i + MAX_CONCURRENT);
+      const batchResults = await Promise.all(batch.map(async (img) => {
+        try {
+          const result = await geminiService.extractWineInfo(img.buffer!, img.mimeType!);
+          return {
+            id: img.id,
+            success: true,
+            data: mapToFrontendFormat(result.data, img.url || null)
+          };
+        } catch (err: any) {
+          return { id: img.id, success: false, error: err.message };
+        }
+      }));
+      results.push(...batchResults);
     }
 
-    // Always use two-stage process: OCR → Gemini refinement
-    // Vision API will read from file path, but we've buffered it just in case
-    const visionResult = await processWineImage(processingImagePath);
-    extractedData = visionResult.data;
-    imageType = visionResult.imageType as any;
-
-    // Clean up temp file after Vision API processing is complete
-    if (imageFile) {
-      // Set Vercel path if needed (otherwise already set above)
-      if (process.env.VERCEL) {
-        savedImagePath = 'stored-in-vercel-blob';
-      }
-      // Delete the temp file now that Vision API is done with it
-      await fs.unlink(imageFile.filepath).catch(() => { });
+    // Return standardized response
+    // If it was a single request, Return simplified object for backward compatibility
+    if (imageRequests.length === 1 && results[0].success) {
+      return sendSuccess(res, {
+        ...results[0].data,
+        type: 'wine_label',
+        extractedData: results[0].data
+      });
     }
 
-    // Return Success
-    sendSuccess(res, {
-      type: imageType,
-      extractedData: extractedData,
-      savedImagePath: savedImagePath,
-      // Map to standard fields
-      uploadedUrl: savedImagePath
-    });
+    return sendSuccess(res, { results, success: true });
 
-  } catch (error) {
-    console.error('Process API Error:', error);
-    sendError(res, error instanceof Error ? error.message : 'Processing failed', 500);
+  } catch (error: any) {
+    console.error('Unified Process API Error:', error);
+    return sendError(res, error.message || 'Processing failed', 500);
   }
 }
 
-// Helper: Read Body
-function readRequestBody(req: NextApiRequest): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', chunk => data += chunk);
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
-  });
+async function resolveImageSource(url: string): Promise<{ buffer: Buffer; mimeType: string }> {
+  if (url.startsWith('http')) {
+    const response = await fetch(url);
+    return { buffer: Buffer.from(await response.arrayBuffer()), mimeType: response.headers.get('content-type') || 'image/jpeg' };
+  } else {
+    const filePath = path.join(process.cwd(), 'public', url);
+    const buffer = await fs.readFile(filePath);
+    const ext = path.extname(url).toLowerCase();
+    const mimeType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    return { buffer, mimeType };
+  }
 }
 
-// Helper: Save Image (without deleting original)
-async function saveImagePermanently(imageFile: formidable.File, deleteOriginal = true): Promise<string> {
+async function saveImagePermanently(file: formidable.File): Promise<string> {
   await fs.mkdir(WINE_PHOTOS_DIR, { recursive: true });
-  const ext = path.extname(imageFile.originalFilename || '.jpg');
+  const ext = path.extname(file.originalFilename || '.jpg');
   const fileName = `wine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}${ext}`;
   const targetPath = path.join(WINE_PHOTOS_DIR, fileName);
-  await fs.copyFile(imageFile.filepath, targetPath);
-
-  // Only delete original if requested (after Vision API processing)
-  if (deleteOriginal) {
-    await fs.unlink(imageFile.filepath).catch(() => { });
-  }
-
-  // Return public URL path
-  // Assumes public/wine-photos is served at /wine-photos
+  await fs.copyFile(file.filepath, targetPath);
   return `/wine-photos/${fileName}`;
+}
+
+function readRequestBody(req: NextApiRequest): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = ''; req.on('data', chunk => data += chunk);
+    req.on('end', () => resolve(data)); req.on('error', reject);
+  });
 }

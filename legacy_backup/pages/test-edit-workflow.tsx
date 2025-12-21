@@ -191,7 +191,8 @@ const TestEditWorkflow: React.FC = () => {
               const sampleData: NotionWineProperties = {
                 'Name': 'Sample Wine 2025',
                 'Vintage': 2020,
-                'Region/Producer': 'Napa Valley / Sample Winery',
+                'Producer': 'Sample Winery',          // C: 생산자 (분리)
+                'Region': 'Napa Valley',               // D: 지역 (분리)
                 'Price': 45.99,
                 'Quantity': 1,
                 'Store': 'Test Wine Shop',

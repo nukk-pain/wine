@@ -23,7 +23,8 @@ export type ImageType = 'wine_label' | 'unknown';
 export interface NotionWineProperties {
     'Name': string;
     'Vintage': number | null;
-    'Region/Producer': string;
+    'Producer': string;                    // C: 생산자 (분리)
+    'Region': string;                      // D: 지역 (분리)
     'Price': number | null;
     'Quantity': number | null;
     'Store': string;
@@ -66,7 +67,8 @@ export interface WineInfo extends NotionWineProperties {
 export interface LegacyWineData {
     name: string;
     vintage?: number;
-    'Region/Producer'?: string;
+    producer?: string;                 // 생산자 (분리)
+    region?: string;                   // 지역 (분리)
     'Varietal(품종)'?: string | string[];
     price?: number;
     quantity?: number;

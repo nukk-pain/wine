@@ -34,11 +34,10 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
     };
 
     return (
-        <article className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-wine-glass to-wine-glass/50 backdrop-blur-md border transition-all duration-300 ${
-            isSelected
-                ? 'border-wine-gold shadow-wine-selected'
-                : 'border-wine-glassBorder hover:border-wine-gold/40'
-        }`}>
+        <article className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-wine-glass to-wine-glass/50 backdrop-blur-md border transition-all duration-300 ${isSelected
+            ? 'border-wine-gold shadow-wine-selected'
+            : 'border-wine-glassBorder hover:border-wine-gold/40'
+            }`}>
             {/* Selection glow effect */}
             {isSelected && (
                 <div className="absolute inset-0 bg-gradient-radial from-wine-gold/10 to-transparent pointer-events-none" />
@@ -76,15 +75,14 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
 
                 {/* Status badge (top right) */}
                 <div className="absolute top-3 right-3">
-                    <span className={`px-2 py-1 rounded-lg text-xs font-body font-semibold backdrop-blur-sm ${
-                        item.status === 'completed' ? 'bg-wine-gold/20 text-wine-gold border border-wine-gold/50' :
+                    <span className={`px-2 py-1 rounded-lg text-xs font-body font-semibold backdrop-blur-sm ${item.status === 'completed' ? 'bg-wine-gold/20 text-wine-gold border border-wine-gold/50' :
                         item.status === 'error' ? 'bg-wine-red/20 text-wine-red border border-wine-red/50' :
-                        item.status === 'saved' ? 'bg-wine-gold/30 text-wine-cream border border-wine-gold/60' :
-                        'bg-wine-glass text-wine-creamDim border border-wine-glassBorder'
-                    }`}>
+                            item.status === 'saved' ? 'bg-wine-gold/30 text-wine-cream border border-wine-gold/60' :
+                                'bg-wine-glass text-wine-creamDim border border-wine-glassBorder'
+                        }`}>
                         {item.status === 'completed' ? 'Analyzed' :
-                         item.status === 'error' ? 'Error' :
-                         item.status === 'saved' ? 'Saved' : 'Processing'}
+                            item.status === 'error' ? 'Error' :
+                                item.status === 'saved' ? 'Saved' : 'Processing'}
                     </span>
                 </div>
             </div>
@@ -94,7 +92,7 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
                 {/* Wine name + status */}
                 <div>
                     <h3 className="font-playfair text-lg text-wine-cream font-medium leading-tight line-clamp-2 mb-1.5">
-                        {data.Name || data.wine_name || '(No Name)'}
+                        {data.Name || data.name || data.wine_name || '(No Name)'}
                     </h3>
                 </div>
 
@@ -103,13 +101,24 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
 
                 {/* Details grid */}
                 <dl className="space-y-2 text-sm">
-                    {(data['Region/Producer'] || data.producer || data.region) && (
+                    {(data.Producer || data.producer) && (
                         <div className="flex items-start gap-3">
                             <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
                                 Producer
                             </dt>
                             <dd className="font-body text-wine-cream flex-1 font-medium">
-                                {data['Region/Producer'] || [data.region, data.producer].filter(Boolean).join(', ')}
+                                {data.Producer || data.producer}
+                            </dd>
+                        </div>
+                    )}
+
+                    {(data.Region || data.region) && (
+                        <div className="flex items-start gap-3">
+                            <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
+                                Region
+                            </dt>
+                            <dd className="font-body text-wine-creamDim flex-1">
+                                {data.Region || data.region}
                             </dd>
                         </div>
                     )}

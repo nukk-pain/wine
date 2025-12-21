@@ -36,7 +36,8 @@ export interface UnifiedWorkflowProps {
 const SAMPLE_DATA: NotionWineProperties = {
   'Name': 'Test Wine 2025',
   'Vintage': 2020,
-  'Region/Producer': 'Napa Valley / Test Winery',
+  'Producer': 'Test Winery',           // C: 생산자 (분리)
+  'Region': 'Napa Valley',              // D: 지역 (분리)
   'Price': 35.99,
   'Quantity': 1,
   'Store': 'Wine Test Shop',
@@ -163,7 +164,8 @@ export default function UnifiedWorkflow({
         const wineData: NotionWineProperties = {
           'Name': extracted.Name || extracted.name || 'Unknown Wine',
           'Vintage': extracted.Vintage || extracted.vintage || null,
-          'Region/Producer': extracted['Region/Producer'] || extracted.producer || extracted.region || '',
+          'Producer': extracted.Producer || extracted.producer || '',    // C: 생산자 (분리)
+          'Region': extracted.Region || extracted.region || '',          // D: 지역 (분리)
           'Price': extracted.Price || null,
           'Quantity': extracted.Quantity || 1,
           'Store': extracted.Store || '',

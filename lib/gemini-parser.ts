@@ -44,7 +44,8 @@ export class NotionCompatibleParser {
       const notionData: NotionWineProperties = {
         'Name': wineInfo.Name || '',
         'Vintage': wineInfo.Vintage || null,
-        'Region/Producer': wineInfo['Region/Producer'] || '',
+        'Producer': wineInfo.Producer || '',            // C: 생산자 (분리)
+        'Region': wineInfo.Region || '',                // D: 지역 (분리)
         'Price': wineInfo.Price || null,
         'Quantity': wineInfo.Quantity || 1, // Default to 1 for wine labels
         'Store': wineInfo.Store || '',
@@ -130,7 +131,8 @@ export function prepareForNotionSubmission(wineData: NotionWineProperties) {
   const prepared: NotionWineProperties = {
     'Name': wineData.Name?.trim() || 'Unknown Wine',
     'Vintage': wineData.Vintage,
-    'Region/Producer': wineData['Region/Producer']?.trim() || '',
+    'Producer': wineData.Producer?.trim() || '',       // C: 생산자 (분리)
+    'Region': wineData.Region?.trim() || '',           // D: 지역 (분리)
     'Price': wineData.Price,
     'Quantity': wineData.Quantity || 1,
     'Store': wineData.Store?.trim() || '',

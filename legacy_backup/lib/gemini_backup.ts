@@ -128,7 +128,8 @@ Return EXACT keys:
         console.log('🎉 [Gemini] Successfully parsed wine info:');
         console.log('   Raw parsed data:', JSON.stringify(wineInfo, null, 2));
         console.log('   Wine Name:', wineInfo.Name);
-        console.log('   Region/Producer:', wineInfo['Region/Producer']);
+        console.log('   Producer:', wineInfo.Producer);
+        console.log('   Region:', wineInfo.Region);
         console.log('   Vintage:', wineInfo.Vintage);
         console.log('   Varietals:', wineInfo['Varietal(품종)']);
       }

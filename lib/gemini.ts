@@ -133,7 +133,8 @@ const wineInfoJsonSchema: Record<string, any> = {
     properties: {
         Name: { type: 'string', nullable: true },
         Vintage: { type: 'integer', nullable: true },
-        'Region/Producer': { type: 'string', nullable: true },
+        Producer: { type: 'string', nullable: true },   // C: 생산자 (분리)
+        Region: { type: 'string', nullable: true },     // D: 지역 (분리)
         Price: { type: 'number', nullable: true },
         Quantity: { type: 'integer' },
         Store: { type: 'string', nullable: true },
@@ -153,7 +154,8 @@ const wineInfoJsonSchema: Record<string, any> = {
     required: [
         'Name',
         'Vintage',
-        'Region/Producer',
+        'Producer',
+        'Region',
         'Price',
         'Quantity',
         'Store',
@@ -374,13 +376,42 @@ function validateWineData(data: WineData): ValidationResult {
 }
 
 function validateWineInfo(data: WineInfo): ValidationResult {
-    if (!data.Name || data.Name.length < 2) {
+    // Gemini가 간헐적으로 대소문자를 다르게 반환할 수 있으므로 둘 다 확인
+    const name = data.Name || (data as any).name;
+    if (!name || name.length < 2) {
         return { valid: false, reason: 'Name missing/short' };
     }
-    if (!data['Region/Producer']) {
-        return { valid: false, reason: 'Region/Producer null' };
+    const producer = data.Producer || (data as any).producer;
+    if (!producer) {
+        return { valid: false, reason: 'Producer null' };
     }
     return { valid: true };
+}
+
+/**
+ * Gemini 응답을 정규화하여 필드명 일관성 확보
+ * (소문자 → 대문자 변환, Producer/Region 분리)
+ */
+function normalizeWineInfo(data: any): WineInfo {
+    return {
+        Name: data.Name || data.name || null,
+        Vintage: data.Vintage || data.vintage || null,
+        Producer: data.Producer || data.producer || '',      // 생산자 (분리)
+        Region: data.Region || data.region || '',            // 지역 (분리)
+        Price: data.Price || data.price || null,
+        Quantity: data.Quantity || data.quantity || 1,
+        Store: data.Store || data.store || '',
+        'Varietal(품종)': data['Varietal(품종)'] || data.varietal ||
+            (data.grape_variety ? [data.grape_variety] : []),
+        Image: data.Image || null,
+        country: data.country || null,
+        alcohol_content: data.alcohol_content || null,
+        volume: data.volume || null,
+        wine_type: data.wine_type || null,
+        appellation: data.appellation || null,
+        notes: data.notes || null,
+        varietal_reasoning: data.varietal_reasoning || null,
+    };
 }
 
 // ============================================================
@@ -451,15 +482,11 @@ export class GeminiService {
             const text = response.text;
             if (!text) throw new Error('No response from Gemini Vision');
 
-            const result = safeJsonParse<WineInfo>(text);
-            const validation = validateWineInfo(result);
+            // 파싱 후 정규화하여 필드명 일관성 확보
+            const rawResult = safeJsonParse<any>(text);
+            const result = normalizeWineInfo(rawResult);
 
             devTimeEnd('⏱️ [Vision]');
-
-            if (!validation.valid) {
-                console.warn(`⚠️ [Vision-Only] Validation warning: ${validation.reason}`);
-                return { ok: false, data: result, reason: validation.reason! };
-            }
 
             console.log('✅ [Vision-Only] Success:', result.Name);
             return { ok: true, data: result };
@@ -617,4 +644,54 @@ export async function refineWineDataWithGemini(
         devError('❌ [OCR]', error);
         throw error;
     }
+}
+/**
+ * Maps extracted WineInfo to the format expected by the frontend.
+ * Ensures consistent field naming and provides default values.
+ */
+export function mapToFrontendFormat(wineInfo: WineInfo, savedImagePath: string | null = null) {
+    return {
+        // Direct mappings from WineInfo (which extends NotionWineProperties)
+        Name: wineInfo.Name || 'Unknown Wine',
+        name: wineInfo.Name || 'Unknown Wine', // Lowercase fallback for compatibility
+
+        Vintage: wineInfo.Vintage,
+        vintage: wineInfo.Vintage,
+
+        Producer: wineInfo.Producer || '',
+        producer: wineInfo.Producer || '',
+
+        Region: wineInfo.Region || '',
+        region: wineInfo.Region || '',
+
+        'Varietal(품종)': wineInfo['Varietal(품종)'] || [],
+
+        // Static/Computed defaults for the frontend workflow
+        Price: null,
+        price: null,
+        Quantity: 1,
+        quantity: 1,
+        Store: '',
+        'Purchase date': new Date().toISOString().split('T')[0],
+        Status: 'In Stock',
+
+        // Contextual fields
+        'Country(국가)': wineInfo.country || '',
+        country: wineInfo.country || '',
+        'Appellation(원산지명칭)': wineInfo.appellation || '',
+        appellation: wineInfo.appellation || '',
+        'Notes(메모)': wineInfo.notes || '',
+        notes: wineInfo.notes || '',
+
+        // Technical fields
+        wine_type: wineInfo.wine_type || null,
+        alcohol_content: wineInfo.alcohol_content || null,
+        volume: wineInfo.volume || null,
+        varietal_reasoning: wineInfo.varietal_reasoning || '',
+
+        // Image info
+        savedImagePath: savedImagePath,
+        uploadedUrl: savedImagePath,
+        Image: savedImagePath
+    };
 }

@@ -17,7 +17,8 @@ export const ManualWineForm: React.FC<ManualWineFormProps> = ({
     const initialData: NotionWineProperties = {
         'Name': '',
         'Vintage': null,
-        'Region/Producer': '',
+        'Producer': '',               // C: 생산자 (분리)
+        'Region': '',                 // D: 지역 (분리)
         'Price': null,
         'Quantity': 1,
         'Store': '',
@@ -107,19 +108,34 @@ export const ManualWineForm: React.FC<ManualWineFormProps> = ({
                     </div>
                 </div>
 
-                {/* Region/Producer */}
-                <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                        지역/생산자
-                    </label>
-                    <input
-                        type="text"
-                        value={formData['Region/Producer']}
-                        onChange={(e) => handleChange('Region/Producer', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="예: 나파 밸리, 보르도"
-                        disabled={isSubmitting}
-                    />
+                {/* Producer and Region */}
+                <div className="grid grid-cols-2 gap-2">
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                            생산자
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.Producer}
+                            onChange={(e) => handleChange('Producer', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="예: Château Margaux"
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                            지역
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.Region}
+                            onChange={(e) => handleChange('Region', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="예: Napa Valley"
+                            disabled={isSubmitting}
+                        />
+                    </div>
                 </div>
 
                 {/* Varietal and Store */}
