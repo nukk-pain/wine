@@ -8,6 +8,7 @@ coverage/
 build/
 tmp/
 .idea/
+legacy_backup/
 
 # OS generated files
 Thumbs.db

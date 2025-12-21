@@ -1,5 +1,5 @@
-import { NotionWineProperties } from '@/types';
-export type { NotionWineProperties };
+import { NotionWineProperties, WineInfo, ValidationResult } from '@/types';
+export type { NotionWineProperties, WineInfo, ValidationResult };
 
 export const NOTION_PROPERTY_NAMES = {
     NAME: 'Name',
@@ -19,24 +19,96 @@ export const NOTION_PROPERTY_NAMES = {
 } as const;
 
 /**
- * Convert extracted data to Notion format
+ * Normalize extracted data into standardized WineInfo format.
+ * This ensures all AI-detected metadata is preserved.
  */
-export const convertToNotionFormat = (extractedData: any): NotionWineProperties => {
+export const normalizeWineInfo = (data: any, savedImagePath: string | null = null): WineInfo => {
+    // PascalCase primary fields for Notion, but keep lowercase for technical context
+    const normalized: WineInfo = {
+        Name: data.Name || data.name || 'Unknown Wine',
+        Vintage: data.Vintage !== undefined ? data.Vintage : (data.vintage ? parseInt(data.vintage) : null),
+        Producer: data.Producer || data.producer || '',
+        Region: data.Region || data.region || '',
+        Price: data.Price !== undefined ? data.Price : (data.price ? parseFloat(data.price) : null),
+        Quantity: data.Quantity !== undefined ? data.Quantity : (data.quantity || 1),
+        Store: data.Store || data.store || '',
+        'Varietal(품종)': Array.isArray(data['Varietal(품종)'])
+            ? data['Varietal(품종)']
+            : (data.varietal ? [data.varietal] : (data.grape_variety ? [data.grape_variety] : [])),
+        Image: data.Image || savedImagePath || null,
+
+        // Metadata preservation
+        country: data.country || data['Country(국가)'] || null,
+        alcohol_content: data.alcohol_content || null,
+        volume: data.volume || null,
+        wine_type: data.wine_type || null,
+        appellation: data.appellation || data['Appellation(원산지명칭)'] || null,
+        notes: data.notes || data['Notes(메모)'] || null,
+        varietal_reasoning: data.varietal_reasoning || null,
+
+        // Technical fields for backward compatibility
+        name: data.name || data.Name || 'Unknown Wine',
+        vintage: data.vintage || data.Vintage || null,
+        producer: data.producer || data.Producer || '',
+        region: data.region || data.Region || '',
+    };
+
+    return normalized;
+};
+
+/**
+ * Convert normalized WineInfo to specific Notion database properties.
+ * ONLY call this when preparing data for Notion API submission.
+ */
+export const convertToNotionFormat = (wineInfo: WineInfo): NotionWineProperties => {
     return {
-        'Name': extractedData.Name || extractedData.wine_name || '',
-        'Vintage': extractedData.Vintage || extractedData.vintage ? parseInt(extractedData.Vintage || extractedData.vintage) : null,
-        'Producer': extractedData.Producer || extractedData.producer || '',     // C: 생산자 (분리)
-        'Region': extractedData.Region || extractedData.region || '',           // D: 지역 (분리)
-        'Price': extractedData.Price || extractedData.price ? parseFloat(extractedData.Price || extractedData.price) : null,
-        'Quantity': extractedData.Quantity || 1,
-        'Store': extractedData.Store || '',
-        'Varietal(품종)': Array.isArray(extractedData['Varietal(품종)']) ? extractedData['Varietal(품종)'] : (extractedData.varietal ? [extractedData.varietal] : []),
-        'Image': null,
-        'Country(국가)': extractedData['Country(국가)'] || extractedData.country || '',
-        'Appellation(원산지명칭)': extractedData['Appellation(원산지명칭)'] || extractedData.appellation || '',
-        'Notes(메모)': extractedData['Notes(메모)'] || extractedData.notes || ''
+        'Name': wineInfo.Name,
+        'Vintage': wineInfo.Vintage,
+        'Producer': wineInfo.Producer,
+        'Region': wineInfo.Region,
+        'Price': wineInfo.Price,
+        'Quantity': wineInfo.Quantity,
+        'Store': wineInfo.Store,
+        'Varietal(품종)': wineInfo['Varietal(품종)'],
+        'Image': wineInfo.Image,
+        'Country(국가)': wineInfo.country || '',
+        'Appellation(원산지명칭)': wineInfo.appellation || '',
+        'Notes(메모)': wineInfo.notes || ''
     };
 };
+
+/**
+ * Helper function to merge wine data with user edits
+ */
+export function mergeWineDataWithEdits(
+    originalData: NotionWineProperties,
+    userEdits: Partial<NotionWineProperties>
+): NotionWineProperties {
+    return {
+        ...originalData,
+        ...userEdits
+    };
+}
+
+/**
+ * Helper function to prepare data for Notion API
+ */
+export function prepareForNotionSubmission(wineData: NotionWineProperties): NotionWineProperties {
+    return {
+        'Name': wineData.Name?.trim() || 'Unknown Wine',
+        'Vintage': wineData.Vintage,
+        'Producer': wineData.Producer?.trim() || '',
+        'Region': wineData.Region?.trim() || '',
+        'Price': wineData.Price,
+        'Quantity': wineData.Quantity || 1,
+        'Store': wineData.Store?.trim() || '',
+        'Varietal(품종)': wineData['Varietal(품종)'] || [],
+        'Image': wineData.Image,
+        'Country(국가)': (wineData as any)['Country(국가)']?.trim() || '',
+        'Appellation(원산지명칭)': (wineData as any)['Appellation(원산지명칭)']?.trim() || '',
+        'Notes(메모)': (wineData as any)['Notes(메모)']?.trim() || ''
+    };
+}
 
 export function mapToNotionProperties(wineData: NotionWineProperties): Record<string, any> {
     if (process.env.NODE_ENV === 'development') {
@@ -201,58 +273,50 @@ export function mapToNotionProperties(wineData: NotionWineProperties): Record<st
     return properties;
 }
 
-export function validateWineData(data: Partial<NotionWineProperties>): {
-    isValid: boolean;
-    errors: string[];
-} {
+export function validateWineData(data: Partial<NotionWineProperties>): ValidationResult {
     const errors: string[] = [];
+    const warnings: string[] = [];
 
+    // --- ERRORS (Blocking) ---
     if (!data.Name || data.Name.trim() === '') {
-        errors.push('Wine name is required');
+        errors.push('와인 이름은 필수입니다.');
     } else if (data.Name.length > 2000) {
-        errors.push('Wine name is too long (max 2000 characters)');
-    }
-
-    if (data.Vintage !== null && data.Vintage !== undefined) {
-        if (data.Vintage < 1800 || data.Vintage > new Date().getFullYear() + 1) {
-            errors.push('Vintage must be between 1800 and current year + 1');
-        }
+        errors.push('와인 이름이 너무 깁니다 (최대 2000자).');
     }
 
     if (data.Price !== null && data.Price !== undefined && data.Price < 0) {
-        errors.push('Price must be a positive number');
+        errors.push('가격은 0원 이상이어야 합니다.');
     }
 
     if (data.Quantity !== null && data.Quantity !== undefined && data.Quantity < 0) {
-        errors.push('Quantity must be a positive number');
+        errors.push('수량은 0개 이상이어야 합니다.');
+    }
+
+    // --- WARNINGS (Non-Blocking) ---
+    if (data.Vintage !== null && data.Vintage !== undefined) {
+        const currentYear = new Date().getFullYear();
+        if (data.Vintage < 1900 || data.Vintage > currentYear + 1) {
+            warnings.push(`빈티지가 비현실적입니다 (${data.Vintage}). 1900-${currentYear + 1} 사이가 권장됩니다.`);
+        }
+    }
+
+    if (data.Price !== null && data.Price !== undefined && data.Price > 10000000) {
+        warnings.push('가격이 매우 높게 설정되었습니다 (1,000만원 이상).');
     }
 
     if (data.Producer && data.Producer.length > 2000) {
-        errors.push('Producer is too long (max 2000 characters)');
-    }
-
-    if (data.Region && data.Region.length > 2000) {
-        errors.push('Region is too long (max 2000 characters)');
-    }
-
-    if (data.Store && data.Store.length > 2000) {
-        errors.push('Store is too long (max 2000 characters)');
+        warnings.push('생산자 정보가 너무 깁니다.');
     }
 
     if (data['Varietal(품종)'] && Array.isArray(data['Varietal(품종)'])) {
-        if (data['Varietal(품종)'].length > 100) {
-            errors.push('Too many varietals (max 100)');
-        }
-        for (const varietal of data['Varietal(품종)']) {
-            if (typeof varietal === 'string' && varietal.length > 100) {
-                errors.push('Varietal name is too long (max 100 characters)');
-                break;
-            }
+        if (data['Varietal(품종)'].length > 10) { // Notion limit is usually high, but 10 is enough for UI warning
+            warnings.push('품종이 너무 많습니다 (10개 초과).');
         }
     }
 
     return {
         isValid: errors.length === 0,
-        errors
+        errors,
+        warnings
     };
 }

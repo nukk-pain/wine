@@ -54,7 +54,7 @@ export function useNotionSave(): UseNotionSaveReturn {
         // Filter items that are completed and NOT saved yet?
         // Or save all passed items.
         // Generally 'Save All' implies saving all 'completed' items.
-        const targets = items.filter(item => item.status === 'completed');
+        const targets = items.filter(item => item.status === 'completed' && !!item.extractedData);
 
         if (targets.length === 0) return;
 
@@ -70,7 +70,7 @@ export function useNotionSave(): UseNotionSaveReturn {
                 // Need to convert data. extractedData -> NotionWineProperties
                 // Using helper
                 // Note: extractedData might allow any, so we assume it has required fields or helper handles it
-                const wineData = convertToNotionFormat(item.extractedData);
+                const wineData = convertToNotionFormat(item.extractedData!);
 
                 // If image is available (uploadedUrl), we should pass it?
                 // NotionWineProperties has 'Image' field.
@@ -105,7 +105,7 @@ export function useNotionSave(): UseNotionSaveReturn {
         onItemUpdate: (id: string, updates: Partial<ImageProcessingItem>) => void
     ) => {
         // Identify items from IDs
-        const targets = items.filter(item => selectedIds.includes(item.id) && item.status === 'completed');
+        const targets = items.filter(item => selectedIds.includes(item.id) && item.status === 'completed' && !!item.extractedData);
 
         if (targets.length === 0) return;
 
@@ -116,7 +116,7 @@ export function useNotionSave(): UseNotionSaveReturn {
         for (const item of targets) {
             onItemUpdate(item.id, { status: 'saving' });
             try {
-                const wineData = convertToNotionFormat(item.extractedData);
+                const wineData = convertToNotionFormat(item.extractedData!);
                 if (item.uploadedUrl) wineData.Image = item.uploadedUrl;
 
                 const result = await saveItemToNotion(item, wineData);

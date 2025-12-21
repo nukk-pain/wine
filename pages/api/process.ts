@@ -3,7 +3,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import fs from 'fs/promises';
 import path from 'path';
-import { geminiService, mapToFrontendFormat } from '@/lib/gemini';
+import { geminiService } from '@/lib/gemini';
+import { normalizeWineInfo } from '@/lib/utils/notion-helpers';
 import { createFormidableConfig } from '@/lib/formidable-config';
 import { sendSuccess, sendError } from '@/lib/api-utils';
 
@@ -79,7 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return {
             id: img.id,
             success: true,
-            data: mapToFrontendFormat(result.data, img.url || null)
+            data: normalizeWineInfo(result.data, img.url || null)
           };
         } catch (err: any) {
           return { id: img.id, success: false, error: err.message };

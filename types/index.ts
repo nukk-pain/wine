@@ -189,7 +189,7 @@ export interface ImageProcessingItem {
 export interface ValidationResult {
     isValid: boolean;
     errors: string[];
-    warnings?: string[];
+    warnings: string[];
 }
 
 // =============================================================================

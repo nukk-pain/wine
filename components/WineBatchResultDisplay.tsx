@@ -5,25 +5,12 @@ import { WineEditForm } from './WineEditForm';
 import { ManualWineForm } from './ManualWineForm';
 import { useWineSelection } from '@/hooks/useWineSelection';
 
-// Output input item structure from pages/index.tsx (Legacy)
-// It has 'url' but not 'preview', and result.extractedData
-interface LegacyInputItem {
-  id: string;
-  file: File;
-  url?: string;
-  preview?: string;
-  status: any;
-  result?: {
-    extractedData?: any;
-  };
-  extractedData?: any;
-  [key: string]: any;
-}
+import { convertToNotionFormat } from '@/lib/utils/notion-helpers';
 
 interface BatchResultDisplayProps {
-  items: LegacyInputItem[]; // Accept legacy input
-  onSaveAll: (completedItems: any[]) => void;
-  onSaveSelected: (selectedItems: any[]) => void;
+  items: ImageProcessingItem[];
+  onSaveAll: (completedItems: ImageProcessingItem[]) => void;
+  onSaveSelected: (selectedItems: ImageProcessingItem[]) => void;
   onSaveIndividual?: (itemId: string, wineData: NotionWineProperties) => Promise<boolean>;
   onAddManual?: (wineData: NotionWineProperties) => Promise<boolean>;
   onRetryAnalysis?: (itemId: string) => Promise<void>;
@@ -44,24 +31,8 @@ export function WineBatchResultDisplay({
   className = ''
 }: BatchResultDisplayProps) {
 
-  // Normalize items to ensure extractedData and preview are available
-  // and convert to strict ImageProcessingItem type for internal use
-  const normalizedItems: ImageProcessingItem[] = useMemo(() => {
-    return items.map(item => {
-      const normalized: any = {
-        ...item,
-        preview: item.preview || item.url || '', // Map legacy url to preview
-        uploadedUrl: item.uploadedUrl || item.url, // Map legacy url to uploadedUrl
-        extractedData: item.extractedData || item.result?.extractedData // Map legacy extractedData
-      };
-
-      // Ensure we match ImageProcessingItem structure
-      return normalized as ImageProcessingItem;
-    });
-  }, [items]);
-
-  const completedItems = normalizedItems.filter(item => item.status === 'completed' || item.status === 'saved');
-  const errorItems = normalizedItems.filter(item => item.status === 'error');
+  const completedItems = items.filter(item => item.status === 'completed' || item.status === 'saved');
+  const errorItems = items.filter(item => item.status === 'error');
 
   const {
     selectedIds,
@@ -135,7 +106,7 @@ export function WineBatchResultDisplay({
     }
   };
 
-  if (normalizedItems.length === 0 && manualForms.length === 0) {
+  if (items.length === 0 && manualForms.length === 0) {
     return null;
   }
 
@@ -240,22 +211,14 @@ export function WineBatchResultDisplay({
         </div>
       )}
 
-      {/* Processed Items List */}
       <div className="grid grid-cols-1 gap-6">
-        {normalizedItems.map((item) => {
+        {items.map((item) => {
           const isEditing = editingIds.has(item.id);
 
           if (isEditing) {
             // When editing, we need the initial data.
             // extractedData is cast to any in WineInfoCard, same here.
-            const initialData = item.extractedData as unknown as NotionWineProperties; // Assuming it matches or casting
-            // Note: extractedData might not perfectly match NotionWineProperties if it's raw from AI.
-            // But WineEditForm expects NotionWineProperties.
-            // We should probably convert it first using convertToNotionFormat if needed, 
-            // but WineInfoCard passes raw extractedData to props? No, WineInfoCard uses extractedData internally.
-            // Here we pass initialData. 
-            // Let's use the helper if we can import it, or just pass what we have if compatible.
-            // Ideally we should import convertToNotionFormat.
+            const initialData = item.extractedData ? convertToNotionFormat(item.extractedData) : {} as NotionWineProperties;
 
             return (
               <WineEditForm
@@ -270,18 +233,37 @@ export function WineBatchResultDisplay({
 
           return (
             item.status === 'error' ? (
-              <div key={item.id} className="backdrop-blur-xl bg-wine-glass border border-wine-red/40 rounded-2xl p-5">
-                <div className="flex items-start gap-3">
-                  <svg className="w-6 h-6 text-wine-red flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <div className="flex-1">
-                    <p className="font-body text-base font-medium text-wine-red mb-2">
-                      Analysis Failed
-                    </p>
-                    <p className="font-body text-sm text-wine-red/80">
-                      {item.error || 'Unknown error occurred'}
-                    </p>
+              <div key={item.id} className="backdrop-blur-xl bg-wine-glass border border-wine-red/40 rounded-2xl overflow-hidden shadow-wine">
+                <div className="relative h-32 overflow-hidden bg-wine-deep/30">
+                  {item.preview && (
+                    <img src={item.preview} alt="Error preview" className="w-full h-full object-cover opacity-40 grayscale" />
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <svg className="w-10 h-10 text-wine-red/60" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="p-4 border-t border-wine-red/20">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1">
+                      <p className="font-body text-sm font-medium text-wine-red mb-1">
+                        Analysis Failed
+                      </p>
+                      <p className="font-body text-xs text-wine-red/70 line-clamp-2">
+                        {item.error || 'Unknown error occurred'}
+                      </p>
+                    </div>
+                    {onRetryAnalysis && (
+                      <button
+                        onClick={() => onRetryAnalysis(item.id)}
+                        className="p-2 text-wine-gold hover:bg-wine-gold/10 rounded-lg transition-all"
+                      >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

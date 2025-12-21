@@ -25,9 +25,7 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
     onRetryAnalysis,
     onSaveIndividual
 }) => {
-    if (!item.extractedData) return null;
-
-    const data = item.extractedData as any;
+    const data = (item.extractedData || {}) as any;
 
     const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onSelect(item.id, e.target.checked);

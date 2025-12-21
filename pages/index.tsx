@@ -7,61 +7,7 @@ import { ImageProcessingItem, NotionWineProperties } from '@/types';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useWineAnalysis } from '@/hooks/useWineAnalysis';
 import { useNotionSave } from '@/hooks/useNotionSave';
-
-// Mobile-first layout components
-const MobileLayout = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex flex-col space-y-4">
-    {children}
-  </div>
-);
-
-// Mobile-optimized processing step wrapper - Wine Cellar glassmorphism
-const ProcessingStep = ({ title, children, className = "" }: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) => (
-  <section className={`relative group ${className}`}>
-    {/* Glassmorphism container */}
-    <div className="relative backdrop-blur-xl bg-wine-glass border border-wine-glassBorder rounded-2xl p-6 transition-all duration-500 hover:bg-wine-glassHover hover:border-wine-gold/30">
-      {/* Top decorative line */}
-      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-wine-gold/40 to-transparent" />
-
-      {title && (
-        <h2 className="font-playfair text-xl text-wine-cream font-normal mb-6">
-          {title}
-        </h2>
-      )}
-
-      {/* Content */}
-      <div className="relative z-10">
-        {children}
-      </div>
-
-      {/* Hover glow effect */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-gradient-radial from-wine-gold/5 to-transparent rounded-2xl" />
-    </div>
-  </section>
-);
-
-// Mobile-optimized loading spinner - Wine Cellar theme
-const LoadingSpinner = ({ message }: { message: string }) => (
-  <div className="text-center py-8">
-    <div className="text-lg font-body font-medium text-wine-cream mb-4">{message}</div>
-    <div className="flex justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-wine-gold"></div>
-    </div>
-  </div>
-);
-
-// Mobile-optimized error message - Wine Cellar theme
-const ErrorMessage = ({ message }: { message: string }) => (
-  <div className="text-center py-8">
-    <div className="text-lg font-body font-medium text-wine-red bg-wine-red/10 rounded-xl p-4 border border-wine-red/40">
-      {message}
-    </div>
-  </div>
-);
+import { MobileLayout, ProcessingStep, LoadingSpinner, ErrorMessage } from '@/components/layout';
 
 export default function MainPage() {
   const [processingItems, setProcessingItems] = useState<ImageProcessingItem[]>([]);

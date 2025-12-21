@@ -1,31 +1,35 @@
-# [작업 지시서] Step 1. 검증 로직 단일화 및 통합 (Strict Mode)
+# [작업 지시서] Step 2. 검증 로직 단일화 및 고도화 (Strict Mode)
 
 ## 1. 개요
-개발자의 자의적 판단을 배제하고, 프로젝트의 모든 와인 데이터 검증을 단일화합니다. 지시된 사항 외의 추가 로직 구현은 불허합니다.
+분산된 검증 로직을 `notion-helpers.ts`로 통합하되, **저장 차단(Error)**과 **사용자 주의(Warning)**를 명확히 구분하여 유연성을 확보합니다.
 
 ## 2. 상세 지시 사항
 
-### A. [lib/utils/notion-helpers.ts] (Source of Truth)
-- **추가/수정**: `validateWineData` 함수가 `types/index.ts`의 `ValidationResult` 타입을 반환하도록 수정하십시오.
-- **규칙**: 아래의 항목이 반드시 포함되어야 하며, 로직은 이 파일에만 존재해야 합니다.
-    - `Name`: 필수, 공백 제외 최소 1자 이상.
-    - `Vintage`: 1800 ~ 현재연도+1 사이의 숫자만 허용 (null 허용).
-    - `Price/Quantity`: 0 이상의 숫자.
+### A. [lib/utils/notion-helpers.ts] (Validation Core)
+- **수정**: `validateWineData` 함수의 반환 타입을 개선하십시오.
+    ```typescript
+    export interface ValidationResult {
+        isValid: boolean;     // errors.length === 0
+        errors: string[];     // 저장을 막아야 하는 치명적 오류 (예: 이름 누락)
+        warnings: string[];   // 저장 허용하되 경고 표시 (예: 1800년 빈티지)
+    }
+    ```
+- **로직 분리**:
+    - **Error**: 필수 필드 누락(Name), 음수 가격/수량 등 데이터 무결성 위반.
+    - **Warning**: 비현실적 범위(Vintage < 1900, Price > 1천만원 등), 품종 개수 과다 등.
 
-### B. [lib/gemini.ts] (DELETION & REPLACEMENT)
-- **삭제**: 378~389라인의 `validateWineInfo` 함수를 **완전히 삭제**하십시오.
-- **삭제**: 관련 인터페이스 `ValidationResult` 정의를 삭제하십시오.
-- **수정**: `GeminiService.extractWineInfo` 내부에서 분석 결과 반환 전, 반드시 `notion-helpers.ts`의 `validateWineData`를 호출하여 검증하십시오.
-- **엄격 금지**: 이 파일 안에 자체적인 `if (!data.Name)` 식의 검증 코드를 남기지 마십시오.
+### B. [lib/gemini.ts] (Cleanup)
+- **삭제**: 파일 내 `validateWineInfo` 함수 삭제.
+- **수정**: `extractWineInfo`에서 `notion-helpers.ts`의 검증 함수를 호출하되, `isValid` 여부와 관계없이 데이터는 반환하고 `validation` 결과를 함께 넘겨주십시오.
 
-### C. [components/WineEditForm.tsx] (CLEANUP)
-- **삭제**: 내부 `validate` 함수 전체를 삭제하십시오.
-- **수정**: `handleSave` 함수 시작 부분에서 `notion-helpers.ts`의 `validateWineData`를 호출하도록 교체하십시오.
-- **UI 반영**: 반환된 `errors` 배열을 기존 에러 메시지 UI에 그대로 바인딩하십시오.
+### C. [components/WineEditForm.tsx] (UI Update)
+- **삭제**: 내부 `validate` 함수 삭제.
+- **연동**: `onSave` 시점이 아닌 `useEffect`로 `editedData` 변경 시마다 `notion-helpers.ts`의 `validateWineData`를 호출하십시오.
+- **UI**: 
+    - `errors`가 있으면 저장 버튼 비활성화 (Red Alert).
+    - `warnings`가 있으면 저장 버튼 활성화 유지하되 경고 메시지 표시 (Yellow Alert).
 
 ## 3. 검토 및 승인 조건
-- [ ] `grep -r "validateWineInfo" .` 결과가 0건이어야 함.
-- [ ] `grep -r "validate" components/WineEditForm.tsx` 결과가 import 문 외에 없어야 함.
-- [ ] 모든 검증은 `notion-helpers.ts`를 거쳐야 함.
-
-**위 지시 사항을 위반하여 로직을 분산시킬 경우 반려 조치함.**
+- [ ] 빈티지를 1700년으로 입력 시 저장이 가능하고 경고만 떠야 함.
+- [ ] 이름 삭제 시 저장 버튼이 비활성화되어야 함.
+- [ ] `validate` 로직이 오직 `notion-helpers.ts`에만 존재해야 함.

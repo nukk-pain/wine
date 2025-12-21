@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { NotionWineProperties, ValidationResult } from '@/types';
+import { NotionWineProperties } from '@/types';
+import { validateWineData, ValidationResult } from '@/lib/utils/notion-helpers';
 
 interface WineEditFormProps {
     initialData: NotionWineProperties;
@@ -37,36 +38,9 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
     console.log('[WineEditForm] Rendering with initialData:', initialData);
     console.log('[WineEditForm] Normalized data:', normalizedData);
 
-    // 유효성 검사 로직
-    const validate = (data: NotionWineProperties): ValidationResult => {
-        const errors: string[] = [];
-        const warnings: string[] = [];
-
-        if (!data.Name || data.Name.trim() === '') {
-            errors.push('와인 이름은 필수입니다');
-        }
-
-        if (data.Price !== null && data.Price < 0) {
-            errors.push('가격은 0 이상이어야 합니다');
-        }
-
-        if (data.Vintage !== null) {
-            const currentYear = new Date().getFullYear();
-            if (data.Vintage < 1800 || data.Vintage > currentYear + 5) {
-                warnings.push(`빈티지가 비현실적입니다 (1800-${currentYear + 5})`);
-            }
-        }
-
-        return {
-            isValid: errors.length === 0,
-            errors,
-            warnings
-        };
-    };
-
     // 데이터 변경 시 유효성 검사 수행
     useEffect(() => {
-        setValidation(validate(editedData));
+        setValidation(validateWineData(editedData));
     }, [editedData]);
 
     const handleChange = (field: keyof NotionWineProperties, value: any) => {
