@@ -23,7 +23,7 @@ export interface WineData {
 }
 
 export class GeminiService {
-  private model = 'gemini-2.5-flash';
+  private model = 'gemini-3-flash-preview';
 
   async extractWineInfo(imageBuffer: Buffer, mimeType: string): Promise<WineInfo> {
     try {
@@ -197,7 +197,7 @@ Important: Return ONLY the JSON object, no additional text or explanation.`;
     };
 
     const response = await genai.models.generateContent({
-      model: 'gemini-2.5-flash-lite-preview-06-17',
+      model: 'gemini-3-flash-preview',
       config,
       contents,
     });

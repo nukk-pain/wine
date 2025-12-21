@@ -43,7 +43,7 @@ build/
 mock.md
 plan-ori.md
 GEMINI.MD
-docs/
+# docs/
 
 # Test files and assets
 test1.jpg
