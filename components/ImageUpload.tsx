@@ -133,7 +133,6 @@ export function ImageUpload({ onUpload, multiple = false }: ImageUploadProps) {
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           multiple={multiple}
           onChange={handleFileChange}
           aria-label={multiple ? "여러 이미지 파일 선택" : "이미지 파일 선택"}
