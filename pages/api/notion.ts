@@ -68,14 +68,17 @@ async function handleNotionRequest(
           return sendError(res, 'Invalid wine data', 400, validation.errors);
         }
 
-        result = await saveWineToNotionV2(data as NotionWineProperties);
+        // [MODIFIED] Switch to Google Sheets
+        // result = await saveWineToNotionV2(data as NotionWineProperties);
+        const { saveWineToSheets } = await import('@/lib/google-sheets');
+        result = await saveWineToSheets(data as NotionWineProperties);
         break;
 
       case 'save_wine':
         if (!data) {
           return sendError(res, 'Missing required data', 400);
         }
-        
+
         // Convert Gemini format to Notion format if needed
         let wineData: WineData;
         if (data.Name || data['Region/Producer'] || data['Varietal(품종)']) {
@@ -85,22 +88,39 @@ async function handleNotionRequest(
           // Already in WineData format or similar
           wineData = data as WineData;
         }
-        
+
         // Add current date as purchased_date and set status to "재고"
         const enrichedWineData: WineData = {
           ...wineData,
           'Purchase date': new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-          Status: '재고'
+          Status: 'In Stock' // Normalize to English for Sheets
         };
-        
-        result = await saveWineToNotion(enrichedWineData, source);
+
+        // Normalize for NotionWineProperties conversion inside saveWineToSheets
+        // We need to map Legacy WineData -> NotionWineProperties manually here if we want to reuse saveWineToSheets
+        // Or create an adapter. Let's do a quick adapter here.
+        const sheetsData: NotionWineProperties = {
+          'Name': enrichedWineData.name,
+          'Vintage': enrichedWineData.vintage || null,
+          'Region/Producer': enrichedWineData['Region/Producer'] || '',
+          'Price': enrichedWineData.price || null,
+          'Quantity': enrichedWineData.quantity || null,
+          'Store': enrichedWineData.Store || '',
+          'Varietal(품종)': enrichedWineData['Varietal(품종)'] ? (Array.isArray(enrichedWineData['Varietal(품종)']) ? enrichedWineData['Varietal(품종)'] : [enrichedWineData['Varietal(품종)'] as string]) : [],
+          'Image': null, // Legacy save often didn't pass image here? Checking...
+          'Status': 'In Stock',
+          'Purchase date': enrichedWineData['Purchase date']
+        };
+
+        const { saveWineToSheets: saveWineToSheetsLegacy } = await import('@/lib/google-sheets');
+        result = await saveWineToSheetsLegacy(sheetsData);
         break;
 
       case 'save_receipt':
         if (!data) {
           return sendError(res, 'Missing required data', 400);
         }
-        
+
         // Convert Gemini format to Notion format if needed
         let receiptData: ReceiptData;
         if (data.store_name && data.items) {
@@ -110,14 +130,15 @@ async function handleNotionRequest(
           // Already in ReceiptData format
           receiptData = data as ReceiptData;
         }
-        
+
         // Ensure current date is set
         const enrichedReceiptData: ReceiptData = {
           ...receiptData,
           date: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
         };
-        
-        result = await saveReceiptToNotion(enrichedReceiptData);
+
+        const { saveReceiptToSheets } = await import('@/lib/google-sheets');
+        result = await saveReceiptToSheets(enrichedReceiptData);
         break;
 
       case 'update_status':
@@ -141,7 +162,7 @@ async function handleNotionRequest(
           },
           body: JSON.stringify({ urls: [imageUrl] })
         });
-        
+
         if (cleanupResponse.ok) {
           console.log('✅ [NOTION] Blob cleanup successful for:', imageUrl);
         } else {
@@ -158,9 +179,9 @@ async function handleNotionRequest(
   } catch (error) {
     console.error('Notion API error:', error);
     sendError(
-      res, 
-      'Notion operation failed', 
-      500, 
+      res,
+      'Notion operation failed',
+      500,
       error instanceof Error ? error.message : 'Unknown error'
     );
   }

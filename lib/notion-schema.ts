@@ -1,20 +1,8 @@
 // Notion database schema definitions and type mappings
+// Re-export core types from centralized types module
+export type { NotionWineProperties } from '@/types';
+import type { NotionWineProperties } from '@/types';
 
-export interface NotionWineProperties {
-  'Name': string;
-  'Vintage': number | null;
-  'Region/Producer': string;
-  'Price': number | null;
-  'Quantity': number | null;
-  'Store': string;
-  'Varietal(품종)': string[];
-  'Image': string | null;
-  'Status'?: string;
-  'Purchase date'?: string;
-  'Country(국가)'?: string;
-  'Appellation(원산지명칭)'?: string;
-  'Notes(메모)'?: string;
-}
 
 export interface NotionPropertyMapping {
   name: {
@@ -77,7 +65,7 @@ export interface NotionPropertyMapping {
 export const NOTION_PROPERTY_NAMES = {
   NAME: 'Name',
   VINTAGE: 'Vintage',
-  REGION_PRODUCER: 'Region/Producer', 
+  REGION_PRODUCER: 'Region/Producer',
   PRICE: 'Price',
   QUANTITY: 'Quantity',
   STORE: 'Store',
@@ -94,7 +82,7 @@ export function mapToNotionProperties(wineData: NotionWineProperties): Record<st
   if (process.env.NODE_ENV === 'development') {
     console.log('🔧 [NOTION-SCHEMA] Input wineData:', JSON.stringify(wineData, null, 2));
   }
-  
+
   const properties: Record<string, any> = {};
 
   if (wineData.Name) {
@@ -160,7 +148,7 @@ export function mapToNotionProperties(wineData: NotionWineProperties): Record<st
       .filter(v => v && typeof v === 'string' && v.trim().length > 0)
       .map(v => v.trim())
       .slice(0, 100); // Limit to 100 items
-    
+
     if (validVarietals.length > 0) {
       properties[NOTION_PROPERTY_NAMES.VARIETAL] = {
         multi_select: validVarietals.map(varietal => ({
