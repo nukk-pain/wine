@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import WineDataEditForm from './WineDataEditForm';
-import { NotionWineProperties } from '../lib/notion-schema';
+import { NotionWineProperties } from '@/types';
 
 export type WorkflowStep = 'upload' | 'processing' | 'editing' | 'saving' | 'completed' | 'error' | 'idle';
 
@@ -88,10 +88,10 @@ export default function UnifiedWorkflow({
 
   const handleStartEdit = useCallback(() => {
     const dataToUse = useSampleData ? SAMPLE_DATA : state.data;
-    updateState({ 
-      step: 'editing', 
+    updateState({
+      step: 'editing',
       data: dataToUse,
-      error: '' 
+      error: ''
     });
   }, [useSampleData, state.data, updateState]);
 
@@ -105,31 +105,31 @@ export default function UnifiedWorkflow({
       return;
     }
 
-    updateState({ 
-      step: 'processing', 
+    updateState({
+      step: 'processing',
       error: '',
-      processingProgress: 'Uploading image...' 
+      processingProgress: 'Uploading image...'
     });
 
     try {
       let requestBody: any = {};
-      
+
       if (uploadedFile) {
         // For files, we need to upload first
         updateState({ processingProgress: 'Uploading image to server...' });
         const formData = new FormData();
         formData.append('file', uploadedFile);
-        
+
         const uploadResponse = await fetch('/api/upload', {
           method: 'POST',
           body: formData,
         });
-        
+
         if (!uploadResponse.ok) {
           const uploadError = await uploadResponse.json();
           throw new Error(uploadError.error || 'Failed to upload image');
         }
-        
+
         const uploadResult = await uploadResponse.json();
         requestBody.filePath = uploadResult.filePath;
         requestBody.fileUrl = uploadResult.fileUrl;
@@ -152,7 +152,7 @@ export default function UnifiedWorkflow({
       }
 
       const processResult = await processResponse.json();
-      
+
       if (processResult.wines && processResult.wines.length > 0) {
         // Convert to NotionWineProperties format
         const wine = processResult.wines[0];
@@ -166,21 +166,21 @@ export default function UnifiedWorkflow({
           'Varietal(품종)': wine.varietal ? [wine.varietal] : [],
           'Image': requestBody.fileUrl || uploadedUrl || null
         };
-        
-        updateState({ 
+
+        updateState({
           step: 'editing',
           data: wineData,
           processingProgress: ''
         });
       } else {
-        updateState({ 
+        updateState({
           error: 'No wine data found in the image',
-          step: 'error' 
+          step: 'error'
         });
       }
     } catch (error) {
       console.error('Image analysis error:', error);
-      updateState({ 
+      updateState({
         error: error instanceof Error ? error.message : 'Failed to analyze image',
         step: 'error'
       });
@@ -210,13 +210,13 @@ export default function UnifiedWorkflow({
 
       const result = await response.json();
       updateState({ step: 'completed', data: editedData });
-      
+
       if (onComplete) {
         onComplete(editedData);
       }
     } catch (error) {
       console.error('Save to Notion error:', error);
-      updateState({ 
+      updateState({
         error: error instanceof Error ? error.message : 'Failed to save to Notion',
         step: 'error'
       });
@@ -257,7 +257,7 @@ export default function UnifiedWorkflow({
         return (
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">Upload Wine Image</h2>
-            
+
             {enableUpload && (
               <div>
                 <label className="block text-sm font-medium mb-2">Upload Image File</label>

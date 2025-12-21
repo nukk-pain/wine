@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { updateWineRecord, ReceiptData } from '@/lib/notion'; // Kept legacy ReceiptData for now if needed, or replace with types
 // import { ReceiptInfo } from '@/lib/gemini'; // Removed
-import { NotionWineProperties, validateWineData } from '@/lib/notion-schema';
+import { NotionWineProperties, validateWineData } from '@/lib/utils/notion-helpers';
 import { createApiHandler, sendSuccess, sendError } from '@/lib/api-utils';
 import { saveWineToSheets, saveReceiptToSheets } from '@/lib/google-sheets';
 

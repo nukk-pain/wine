@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { NotionWineProperties } from './notion-schema';
+import { NotionWineProperties } from './utils/notion-helpers';
 import { ReceiptData } from './notion';
 import path from 'path';
 

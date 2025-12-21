@@ -1,4 +1,4 @@
-import { NotionWineProperties, validateWineData } from './notion-schema';
+import { NotionWineProperties, validateWineData } from './utils/notion-helpers';
 import { WineInfo } from '@/types';
 import { geminiService } from './gemini';
 

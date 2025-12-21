@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import WineProcessingWorkflow from '../components/workflows/WineProcessingWorkflow';
-import { NotionWineProperties } from '../lib/notion-schema';
+import { NotionWineProperties } from '@/types';
 
 const TestEditWorkflow: React.FC = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -25,21 +25,21 @@ const TestEditWorkflow: React.FC = () => {
 
     try {
       let requestBody: any = {};
-      
+
       if (uploadedFile) {
         // For files, we need to upload first
         const formData = new FormData();
         formData.append('file', uploadedFile);
-        
+
         const uploadResponse = await fetch('/api/upload', {
           method: 'POST',
           body: formData,
         });
-        
+
         if (!uploadResponse.ok) {
           throw new Error('Failed to upload image');
         }
-        
+
         const uploadResult = await uploadResponse.json();
         requestBody.filePath = uploadResult.filePath;
         requestBody.fileUrl = uploadResult.url;
@@ -62,10 +62,10 @@ const TestEditWorkflow: React.FC = () => {
       }
 
       const result = await response.json();
-      
+
       if (result.success && result.parsedData) {
         let wineData: NotionWineProperties;
-        
+
         if (result.imageType === 'wine_label') {
           wineData = result.parsedData.notionData;
         } else if (result.imageType === 'receipt' && result.parsedData.wines.length > 0) {
@@ -77,10 +77,10 @@ const TestEditWorkflow: React.FC = () => {
 
         // Update workflow to editing state with parsed data
         if (workflowRef && workflowRef.updateStep) {
-          workflowRef.updateStep({ 
-            step: 'editing', 
+          workflowRef.updateStep({
+            step: 'editing',
             data: wineData,
-            imageUrl: requestBody.fileUrl 
+            imageUrl: requestBody.fileUrl
           });
         }
       } else {
@@ -89,11 +89,11 @@ const TestEditWorkflow: React.FC = () => {
 
     } catch (error) {
       console.error('Processing error:', error);
-      
+
       if (workflowRef && workflowRef.updateStep) {
-        workflowRef.updateStep({ 
-          step: 'error', 
-          error: error instanceof Error ? error.message : 'Unknown error' 
+        workflowRef.updateStep({
+          step: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
     }
@@ -109,7 +109,7 @@ const TestEditWorkflow: React.FC = () => {
         {/* File Upload Section */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Upload Image</h2>
-          
+
           {/* File Upload */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -160,7 +160,7 @@ const TestEditWorkflow: React.FC = () => {
               File uploaded: {uploadedFile.name}
             </div>
           )}
-          
+
           {uploadedUrl && (
             <div className="mt-4 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded">
               URL ready: {uploadedUrl}
@@ -200,9 +200,9 @@ const TestEditWorkflow: React.FC = () => {
               };
 
               if (workflowRef && workflowRef.updateStep) {
-                workflowRef.updateStep({ 
-                  step: 'editing', 
-                  data: sampleData 
+                workflowRef.updateStep({
+                  step: 'editing',
+                  data: sampleData
                 });
               }
             }}

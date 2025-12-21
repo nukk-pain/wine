@@ -1,6 +1,6 @@
 // lib/notion.ts
 import { Client } from '@notionhq/client';
-import { NotionWineProperties, mapToNotionProperties, validateWineData } from './notion-schema';
+import { NotionWineProperties, mapToNotionProperties, validateWineData } from './utils/notion-helpers';
 
 // Use the 2025-09-03 API version to enable data sources
 const notion = new Client({
@@ -112,7 +112,7 @@ export async function saveWineToNotionV2(wineData: NotionWineProperties): Promis
       console.error('   Error status:', notionError.status);
       console.error('   Error body:', JSON.stringify(notionError.body, null, 2));
     }
-    
+
     // Re-throw with more specific error message
     if (notionError.code === 'conflict') {
       throw new Error('Notion conflict: This record may already exist or there may be a database schema mismatch');
@@ -130,7 +130,7 @@ export async function saveWineToNotion(wineData: WineData, source: 'wine_label' 
     console.log('💾 [NOTION] Legacy saveWineToNotion called with:', JSON.stringify(wineData, null, 2));
     console.log('💾 [NOTION] Source:', source);
   }
-  
+
   // Convert legacy WineData to NotionWineProperties
   const notionData: NotionWineProperties = {
     'Name': wineData.name || 'Unknown Wine',
@@ -139,9 +139,9 @@ export async function saveWineToNotion(wineData: WineData, source: 'wine_label' 
     'Price': wineData.price || null,
     'Quantity': wineData.quantity || null,
     'Store': wineData.Store || '',
-    'Varietal(품종)': wineData['Varietal(품종)'] ? 
-      (Array.isArray(wineData['Varietal(품종)']) ? 
-        wineData['Varietal(품종)'] : 
+    'Varietal(품종)': wineData['Varietal(품종)'] ?
+      (Array.isArray(wineData['Varietal(품종)']) ?
+        wineData['Varietal(품종)'] :
         wineData['Varietal(품종)'].split(',').map(v => v.trim())
       ) : [],
     'Image': null
@@ -157,7 +157,7 @@ export async function saveWineToNotion(wineData: WineData, source: 'wine_label' 
 export async function saveReceiptToNotion(receiptData: ReceiptData) {
   // 영수증에서 추출한 여러 와인 데이터 저장
   const results = [];
-  
+
   for (const item of receiptData.items) {
     const wineEntry: WineData = {
       name: item.name,
@@ -168,11 +168,11 @@ export async function saveReceiptToNotion(receiptData: ReceiptData) {
       Store: receiptData.store,
       Status: '재고' // 새로 구매한 와인은 재고 상태
     };
-    
+
     const saved = await saveWineToNotion(wineEntry, 'receipt');
     results.push(saved);
   }
-  
+
   return results;
 }
 

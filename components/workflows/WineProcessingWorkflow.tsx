@@ -1,6 +1,7 @@
 import React from 'react';
 import UnifiedWorkflow, { UnifiedWorkflowProps, WorkflowStep } from '../UnifiedWorkflow';
-import { NotionWineProperties } from '../../lib/notion-schema';
+import { NotionWineProperties } from '../../types';
+import { validateWineData } from '../../lib/utils/notion-helpers';
 
 interface ProcessingStep {
   step: 'uploading' | 'processing' | 'editing' | 'saving' | 'completed' | 'error';
@@ -26,7 +27,7 @@ export default function WineProcessingWorkflow({
   // Map old step format to new format
   const mapStep = (step?: ProcessingStep): WorkflowStep => {
     if (!step) return 'editing';
-    
+
     switch (step.step) {
       case 'uploading': return 'upload';
       case 'processing': return 'processing';

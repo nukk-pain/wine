@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NotionWineProperties } from '../lib/notion-schema';
+import { NotionWineProperties } from '@/types';
 
 interface WineDataEditFormProps {
   initialData: NotionWineProperties;
@@ -22,7 +22,7 @@ export default function WineDataEditForm({
       ...prev,
       [field]: value
     }));
-    
+
     // Clear errors when user starts editing
     if (errors.length > 0) {
       setErrors([]);
@@ -36,32 +36,32 @@ export default function WineDataEditForm({
 
   const validateForm = (): boolean => {
     const newErrors: string[] = [];
-    
+
     if (!formData.Name || formData.Name.trim() === '') {
       newErrors.push('Wine name is required');
     }
-    
+
     if (formData.Vintage !== null && formData.Vintage !== undefined) {
       if (formData.Vintage < 1800 || formData.Vintage > new Date().getFullYear() + 1) {
         newErrors.push('Vintage must be between 1800 and current year + 1');
       }
     }
-    
+
     if (formData.Price !== null && formData.Price !== undefined && formData.Price < 0) {
       newErrors.push('Price must be a positive number');
     }
-    
+
     if (formData.Quantity !== null && formData.Quantity !== undefined && formData.Quantity < 0) {
       newErrors.push('Quantity must be a positive number');
     }
-    
+
     setErrors(newErrors);
     return newErrors.length === 0;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (validateForm()) {
       onSave(formData);
     }
@@ -70,7 +70,7 @@ export default function WineDataEditForm({
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto">
       <h2 className="text-2xl font-bold mb-6 text-gray-800">Edit Wine Information</h2>
-      
+
       {errors.length > 0 && (
         <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
           <h3 className="font-semibold mb-2">Please fix the following errors:</h3>
