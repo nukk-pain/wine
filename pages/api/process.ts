@@ -52,7 +52,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     } else {
       // Case 2: Multipart Form Data (Single or Multiple file upload)
-      const uploadDir = path.join(process.cwd(), 'tmp');
+      const { getTempDir } = await import('@/lib/formidable-config');
+      const uploadDir = getTempDir();
       await fs.mkdir(uploadDir, { recursive: true }).catch(() => { });
 
       const form = formidable(createFormidableConfig({
