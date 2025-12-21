@@ -3,13 +3,17 @@ const nextConfig = {
   // Remove standalone output for Vercel deployment
   // Remove NAS-specific rewrites and paths
   // Environment variables will be handled by Vercel dashboard
-  
+
   // Performance optimizations
   experimental: {
-    swcMinify: true,
     esmExternals: true,
   },
-  
+
+  // ESLint는 별도로 실행 (빌드 시 비활성화)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Webpack optimizations for development
   webpack: (config, { dev }) => {
     if (dev) {
@@ -19,7 +23,7 @@ const nextConfig = {
         aggregateTimeout: 300,
         ignored: /node_modules/
       };
-      
+
       // Reduce bundle analysis overhead
       config.optimization = {
         ...config.optimization,
@@ -28,7 +32,7 @@ const nextConfig = {
         splitChunks: false,
       };
     }
-    
+
     return config;
   },
 };
