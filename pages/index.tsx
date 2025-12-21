@@ -65,6 +65,7 @@ const ErrorMessage = ({ message }: { message: string }) => (
 
 export default function MainPage() {
   const [processingItems, setProcessingItems] = useState<ImageProcessingItem[]>([]);
+  const [uploadKey, setUploadKey] = useState(0); // Key to reset ImageUpload component
 
   // Hooks
   const { uploadFiles, isUploading, error: uploadError } = useImageUpload();
@@ -110,19 +111,58 @@ export default function MainPage() {
   };
 
   const handleSaveAll = async (items: any[]) => {
-    // We ignore passed items and save all completed from state to ensure consistency, 
-    // or we can use the filtered list if needed. 
-    // Using processingItems is safer for global state sync.
+    // Save all completed items to Google Sheets
     await saveAll(processingItems, onItemUpdate);
+
+    // Cleanup temporary images (Vercel Blob or local files)
+    const imageUrls = processingItems
+      .map(item => item.uploadedUrl)
+      .filter((url): url is string => !!url);
+
+    if (imageUrls.length > 0) {
+      try {
+        console.log('[MainPage] Cleaning up', imageUrls.length, 'temporary images');
+        const cleanupResponse = await fetch('/api/cleanup-blobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: imageUrls })
+        });
+        const cleanupResult = await cleanupResponse.json();
+        console.log('[MainPage] Cleanup result:', cleanupResult);
+      } catch (error) {
+        console.warn('[MainPage] Image cleanup failed:', error);
+        // Don't block the save flow if cleanup fails
+      }
+    }
+
+    // Clear all items to return to home state
+    setProcessingItems([]);
+    setUploadKey(prev => prev + 1); // Reset ImageUpload to clear previews
+    console.log('[MainPage] Save All complete, returned to home');
   };
 
   const handleSaveSelected = async (items: any[]) => {
     const ids = items.map((i: any) => i.id);
     await saveSelected(processingItems, ids, onItemUpdate);
+
+    // Remove saved items (items with status 'saved' after saveSelected completes)
+    setProcessingItems([]);
+    setUploadKey(prev => prev + 1); // Reset ImageUpload to clear previews
+    console.log('[MainPage] Save Selected complete, returned to home');
   };
 
-  const handleSaveIndividual = async (id: string, data: NotionWineProperties) => {
-    return await saveIndividual(id, data);
+  // Update individual item's extractedData locally (does NOT send to Google Sheets)
+  // Actual upload happens via Save All / Save Selected buttons
+  const handleUpdateIndividual = async (id: string, data: NotionWineProperties) => {
+    if (id) {
+      setProcessingItems(prev => prev.map(item =>
+        item.id === id
+          ? { ...item, extractedData: data, status: 'completed' as const }
+          : item
+      ));
+      console.log('[MainPage] Updated extractedData locally for item:', id);
+    }
+    return true; // Always return true since it's just a local update
   };
 
   const handleAddManual = async (data: NotionWineProperties) => {
@@ -183,6 +223,7 @@ export default function MainPage() {
             <ProcessingStep title="Upload Images">
               <div data-testid="upload-area">
                 <ImageUpload
+                  key={uploadKey}
                   onUpload={handleImageUpload}
                   multiple={true}
                 />
@@ -222,7 +263,7 @@ export default function MainPage() {
                       items={processingItems}
                       onSaveAll={handleSaveAll}
                       onSaveSelected={handleSaveSelected}
-                      onSaveIndividual={handleSaveIndividual}
+                      onSaveIndividual={handleUpdateIndividual}
                       onAddManual={handleAddManual}
                       onRetryAnalysis={handleRetryAnalysis}
                       onDelete={handleDelete}

@@ -29,10 +29,8 @@ export function useWineAnalysis(): UseWineAnalysisReturn {
 
             const formData = new FormData();
             formData.append('image', item.file);
-            formData.append('imageType', 'wine_label'); // Defaulting to wine_label for now
-            // If we support receipts, we need to pass that info. 
-            // But items don't have imageType set yet usually? Or passed in item?
-            // item.imageType might be set if manually selected.
+            formData.append('type', 'wine_label'); // Default to wine_label
+            formData.append('useGemini', 'true'); // Use Gemini for analysis
 
             const response = await fetch('/api/process', {
                 method: 'POST',
@@ -75,10 +73,9 @@ export function useWineAnalysis(): UseWineAnalysisReturn {
         setError(null);
 
         try {
-            // Process strictly sequentially or parallel?
-            // Existing index.tsx `analyzeImage` is 1 by 1 inside loop?
-            // `handleBatchAnalyze` uses `for ... of` with `await`. So SEQUENTIAL.
-            // Sequential is safer for rate limits.
+            // Parallel processing with concurrency limit
+            // Process up to MAX_CONCURRENT items at once to balance speed and API limits
+            const MAX_CONCURRENT = 3; // Adjust based on API rate limits
 
             const pendingItems = items.filter(item =>
                 item.status === 'pending' ||
@@ -86,8 +83,14 @@ export function useWineAnalysis(): UseWineAnalysisReturn {
                 item.status === 'error'
             );
 
-            for (const item of pendingItems) {
-                await analyzeItem(item, onItemComplete);
+            // Process in batches for controlled parallelism
+            for (let i = 0; i < pendingItems.length; i += MAX_CONCURRENT) {
+                const batch = pendingItems.slice(i, i + MAX_CONCURRENT);
+
+                // Process batch items in parallel
+                await Promise.all(
+                    batch.map(item => analyzeItem(item, onItemComplete))
+                );
             }
 
         } catch (err: any) {

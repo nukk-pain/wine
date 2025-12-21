@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import WineDataEditForm from './WineDataEditForm';
-import { NotionWineProperties } from '@/types';
+import { NotionWineProperties, WineInfo } from '@/types';
 
 export type WorkflowStep = 'upload' | 'processing' | 'editing' | 'saving' | 'completed' | 'error' | 'idle';
 
@@ -133,6 +133,8 @@ export default function UnifiedWorkflow({
         const uploadResult = await uploadResponse.json();
         requestBody.filePath = uploadResult.filePath;
         requestBody.fileUrl = uploadResult.fileUrl;
+        // API requires imageUrl to be set
+        requestBody.imageUrl = uploadResult.filePath;
       } else if (uploadedUrl) {
         // For URLs, pass directly
         requestBody.imageUrl = uploadedUrl;
@@ -153,19 +155,32 @@ export default function UnifiedWorkflow({
 
       const processResult = await processResponse.json();
 
-      if (processResult.wines && processResult.wines.length > 0) {
-        // Convert to NotionWineProperties format
-        const wine = processResult.wines[0];
+      // New API format: { success: true, data: { type, extractedData, savedImagePath } }
+      if (processResult.success && processResult.data?.extractedData) {
+        const extracted = processResult.data.extractedData as WineInfo;
+
+        // Map extractedData to NotionWineProperties format
         const wineData: NotionWineProperties = {
-          'Name': wine.name,
-          'Vintage': wine.vintage || null,
-          'Region/Producer': wine.region || wine.producer || '',
-          'Price': wine.price || null,
-          'Quantity': wine.quantity || 1,
-          'Store': '',
-          'Varietal(품종)': wine.varietal ? [wine.varietal] : [],
-          'Image': requestBody.fileUrl || uploadedUrl || null
+          'Name': extracted.Name || extracted.name || 'Unknown Wine',
+          'Vintage': extracted.Vintage || extracted.vintage || null,
+          'Region/Producer': extracted['Region/Producer'] || extracted.producer || extracted.region || '',
+          'Price': extracted.Price || null,
+          'Quantity': extracted.Quantity || 1,
+          'Store': extracted.Store || '',
+          'Varietal(품종)': (function () {
+            const raw = (extracted as any)['Varietal(품종)'] || (extracted as any).grape_variety;
+            if (Array.isArray(raw)) return raw;
+            if (typeof raw === 'string') return raw.split(',').map((s: string) => s.trim()).filter(Boolean);
+            return [];
+          })(),
+          'Image': processResult.data.savedImagePath || requestBody.fileUrl || uploadedUrl || null,
+          // Map additional optional fields to Notion-compatible format
+          'Country(국가)': extracted.country || extracted['Country(국가)'],
+          'Appellation(원산지명칭)': extracted.appellation || extracted['Appellation(원산지명칭)'],
+          'Notes(메모)': extracted.notes || extracted['Notes(메모)']
         };
+
+        console.log('[UnifiedWorkflow] Extracted and mapped wine data:', wineData);
 
         updateState({
           step: 'editing',
@@ -174,7 +189,7 @@ export default function UnifiedWorkflow({
         });
       } else {
         updateState({
-          error: 'No wine data found in the image',
+          error: processResult.error || 'No wine data found in the image',
           step: 'error'
         });
       }
@@ -188,19 +203,25 @@ export default function UnifiedWorkflow({
   };
 
   const handleSaveToNotion = async (editedData: NotionWineProperties) => {
+    console.log('[UnifiedWorkflow] handleSaveToNotion called with:', editedData);
+
     setIsSubmitting(true);
     updateState({ step: 'saving', data: editedData });
 
     try {
+      const requestBody = {
+        action: 'save_wine_v2',
+        data: editedData
+      };
+
+      console.log('[UnifiedWorkflow] Sending to /api/notion:', requestBody);
+
       const response = await fetch('/api/notion', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          action: 'save_wine_v2',
-          data: editedData
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -209,6 +230,9 @@ export default function UnifiedWorkflow({
       }
 
       const result = await response.json();
+
+      console.log('[UnifiedWorkflow] Save successful, result:', result);
+
       updateState({ step: 'completed', data: editedData });
 
       if (onComplete) {

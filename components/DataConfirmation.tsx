@@ -1,5 +1,5 @@
 // components/DataConfirmation.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { WineInfo } from '@/types'; // Import from central types
 
 interface DataConfirmationProps {
@@ -30,13 +30,13 @@ const DataField = ({
     {onChange ? (
       <input
         type={type}
-        value={value || ''}
+        value={value ?? ''}
         onChange={(e) => onChange(type === 'number' ? Number(e.target.value) : e.target.value)}
         className="w-full p-4 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
       />
     ) : (
       <div className="p-4 bg-gray-50 border-2 border-gray-200 rounded-xl text-lg">
-        {value || <span className="text-gray-400">정보 없음</span>}
+        {value != null ? value : <span className="text-gray-400">정보 없음</span>}
       </div>
     )}
   </div>
@@ -129,6 +129,11 @@ export const DataConfirmation = ({
 }: DataConfirmationProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState(data);
+
+  // Sync editedData when data prop changes
+  useEffect(() => {
+    setEditedData(data);
+  }, [data]);
 
   const handleFieldChange = (field: string, value: any) => {
     setEditedData(prev => ({

@@ -2,11 +2,11 @@ import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { classifyImage, ImageType } from './parsers/image-classifier';
 import { parseWineLabel } from './parsers/wine-label';
 import { parseReceipt } from './parsers/receipt';
-import { 
-  generateCacheKey, 
-  getCachedResult, 
+import {
+  generateCacheKey,
+  getCachedResult,
   setCachedResult,
-  getCacheStats 
+  getCacheStats
 } from './vision-cache';
 import { getConfig, isServiceEnabled, getServiceTimeout } from './config';
 import { refineWineDataWithGemini } from './gemini';
@@ -23,7 +23,7 @@ export interface ProcessedImageResult {
 export async function processWineImage(imageUrl: string): Promise<ProcessedImageResult> {
   const startTime = Date.now();
   const requestId = generateRequestId();
-  
+
   console.log('Wine image processing started:', {
     requestId,
     imageUrl: maskSensitiveData(imageUrl),
@@ -44,24 +44,24 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
       textPreview: extractedText.substring(0, 200),
       textSample: extractedText.split('\n').slice(0, 5).join(' | ')
     });
-    
+
     // 2. 이미지 타입 분류
     if (process.env.NODE_ENV === 'development') {
       console.log('Starting image classification:', { requestId });
     }
     const classification = await classifyImage(extractedText);
-    
+
     console.log('Image classified:', {
       requestId,
       imageType: classification.type,
       confidence: classification.confidence,
       indicators: classification.indicators
     });
-    
+
     // 3. 적절한 파서로 데이터 추출
     let parsedData;
     let parsingError = null;
-    
+
     try {
       switch (classification.type) {
         case ImageType.WINE_LABEL:
@@ -69,10 +69,10 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
             console.log('Parsing wine label data:', { requestId });
           }
           const wineData = parseWineLabel(extractedText);
-          
+
           let geminiData = null;
           let usedGemini = false;
-          
+
           try {
             // Use Gemini to refine the OCR text
             if (process.env.NODE_ENV === 'development') {
@@ -86,29 +86,56 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
               error: geminiError instanceof Error ? geminiError.message : 'Unknown error'
             });
           }
-          
+
           // Map to WineData interface expected by ResultDisplay
           // Prioritize Gemini results, fallback to rule-based parser
+          const producerRegion = geminiData?.producer
+            ? (geminiData.country ? `${geminiData.producer}, ${geminiData.country}` : geminiData.producer)
+            : (wineData.producer || wineData.region || geminiData?.region || '');
+
+          const grapeVariety = geminiData?.grape_variety || wineData.variety;
+          const varietalArray = grapeVariety
+            ? (Array.isArray(grapeVariety) ? grapeVariety : [grapeVariety])
+            : [];
+
           parsedData = {
+            // Use both uppercase and lowercase for maximum compatibility
+            Name: geminiData?.name || wineData.name || 'Unknown Wine',
             name: geminiData?.name || wineData.name || 'Unknown Wine',
+            Vintage: geminiData?.vintage || wineData.vintage,
             vintage: geminiData?.vintage || wineData.vintage,
-            'Region/Producer': geminiData?.producer || wineData.producer || wineData.region || geminiData?.region,
-            'Varietal(품종)': geminiData?.grape_variety || wineData.variety,
+            'Region/Producer': producerRegion,
+            'Varietal(품종)': varietalArray,
+            Price: undefined,
             price: undefined,
-            quantity: undefined
+            Quantity: undefined,
+            quantity: undefined,
+            // Include all Gemini fields for frontend (with both cases)
+            'Country(국가)': geminiData?.country,
+            country: geminiData?.country,
+            'Appellation(원산지명칭)': geminiData?.appellation,
+            appellation: geminiData?.appellation,
+            'Notes(메모)': geminiData?.notes,
+            notes: geminiData?.notes,
+            wine_type: geminiData?.wine_type,
+            alcohol_content: geminiData?.alcohol_content,
+            volume: geminiData?.volume,
+            varietal_reasoning: geminiData?.varietal_reasoning
           };
-          
+
           if (process.env.NODE_ENV === 'development') {
             console.log('Wine label parsing completed:', {
               requestId,
               hasName: !!parsedData.name,
               hasVintage: !!parsedData.vintage,
               hasProducer: !!parsedData['Region/Producer'],
+              varietalArray,
               usedGemini
             });
+            console.log('Final parsed data for frontend:', JSON.stringify(parsedData, null, 2));
           }
           break;
-          
+
         case ImageType.RECEIPT:
           if (process.env.NODE_ENV === 'development') {
             console.log('Parsing receipt data:', { requestId });
@@ -120,7 +147,7 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
             items: receiptData.items || [],
             total: receiptData.total || 0
           };
-          
+
           if (process.env.NODE_ENV === 'development') {
             console.log('Receipt parsing completed:', {
               requestId,
@@ -130,14 +157,55 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
             });
           }
           break;
-          
+
         default:
-          console.warn('Unknown image type detected:', {
+          console.warn('Unknown image type, attempting wine label parsing:', {
             requestId,
             imageType: classification.type,
-            confidence: classification.confidence
+            confidence: classification.confidence,
+            textLength: extractedText.length
           });
-          parsedData = { error: 'Unknown image type' };
+
+          // unknown 타입이어도 텍스트가 있으면 와인 라벨로 시도
+          if (extractedText.trim().length > 0) {
+            const wineData = parseWineLabel(extractedText);
+
+            let geminiData = null;
+            let usedGemini = false;
+
+            try {
+              if (process.env.NODE_ENV === 'development') {
+                console.log('Calling Gemini for unknown type refinement:', { requestId });
+              }
+              geminiData = await refineWineDataWithGemini(extractedText);
+              usedGemini = true;
+            } catch (geminiError) {
+              console.warn('Gemini refinement failed for unknown type:', {
+                requestId,
+                error: geminiError instanceof Error ? geminiError.message : 'Unknown error'
+              });
+            }
+
+            parsedData = {
+              name: geminiData?.name || wineData.name || 'Unknown Wine',
+              vintage: geminiData?.vintage || wineData.vintage,
+              'Region/Producer': geminiData?.producer || wineData.producer || wineData.region || geminiData?.region,
+              'Varietal(품종)': geminiData?.grape_variety || wineData.variety,
+              price: undefined,
+              quantity: undefined
+            };
+
+            if (process.env.NODE_ENV === 'development') {
+              console.log('Unknown type parsed as wine label:', {
+                requestId,
+                hasName: !!parsedData.name,
+                hasVintage: !!parsedData.vintage,
+                usedGemini
+              });
+            }
+          } else {
+            parsedData = { error: 'No text found in image' };
+          }
       }
     } catch (parseError: any) {
       parsingError = parseError;
@@ -149,13 +217,13 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
           stack: parseError.stack
         }
       });
-      
-      parsedData = { 
+
+      parsedData = {
         error: 'Failed to parse image data',
-        details: parseError.message 
+        details: parseError.message
       };
     }
-    
+
     const processingTime = Date.now() - startTime;
     const result = {
       imageType: classification.type,
@@ -163,7 +231,7 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
       data: parsedData,
       rawText: extractedText
     };
-    
+
     console.log('Wine image processing completed:', {
       requestId,
       imageType: classification.type,
@@ -173,12 +241,12 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
       hasParsingError: !!parsingError,
       success: !parsedData.error
     });
-    
+
     return result;
-    
+
   } catch (error: any) {
     const processingTime = Date.now() - startTime;
-    
+
     console.error('Wine image processing failed:', {
       requestId,
       imageUrl: maskSensitiveData(imageUrl),
@@ -190,7 +258,7 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
       processingTime,
       success: false
     });
-    
+
     // Re-throw the error for the caller to handle
     throw error;
   }
@@ -206,7 +274,7 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
   const startTime = Date.now();
   const requestId = generateRequestId();
   const config = getConfig();
-  
+
   console.log('Vision API request started:', {
     requestId,
     imageUrl: maskSensitiveData(imageUrl),
@@ -219,12 +287,12 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
   try {
     // 1. 입력 검증
     validateImagePath(imageUrl);
-    
+
     // 2. 환경별 모의 데이터 처리
     if (config.vision.mockMode || config.environment === 'test') {
       // 테스트/모의 환경에서 모의 OCR 결과 반환
       const mockText = getMockTextForTestImage(imageUrl);
-      
+
       console.log('Vision API mock response:', {
         requestId,
         imageUrl: maskSensitiveData(imageUrl),
@@ -233,20 +301,20 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
         isMock: true,
         environment: config.environment
       });
-      
+
       return mockText;
     }
-    
+
     // 3. 서비스 활성화 확인
     if (!isServiceEnabled('vision')) {
       throw new Error('Vision API is disabled in current environment');
     }
-    
+
     // 4. 캐시 확인 (캐시가 활성화된 경우)
     if (isServiceEnabled('cache')) {
       const cacheKey = await generateCacheKey(imageUrl);
       const cachedResult = getCachedResult(cacheKey);
-      
+
       if (cachedResult !== undefined) {
         const processingTime = Date.now() - startTime;
 
@@ -269,43 +337,49 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
         return cachedResult;
       }
     }
-    
+
     // 5. Google Cloud Vision API 클라이언트 생성 (환경별 설정)
     const clientOptions: any = {};
-    
+
     if (config.vision.projectId) {
       clientOptions.projectId = config.vision.projectId;
     }
-    
-    // Vercel 환경에서는 환경 변수를 직접 사용
-    if (process.env.VERCEL && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+
+    // Try to parse credentials from environment variable (works for both Vercel and local dev)
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       try {
+        // Try parsing as JSON first (inline credentials)
         const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS);
         clientOptions.credentials = credentials;
       } catch (e) {
-        console.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS:', e);
-        throw new Error('Invalid GOOGLE_APPLICATION_CREDENTIALS format in Vercel environment');
+        // If parsing fails, treat it as a file path
+        if (fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+          clientOptions.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+        } else {
+          console.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS:', e);
+          throw new Error('Invalid GOOGLE_APPLICATION_CREDENTIALS: not a valid JSON or file path');
+        }
       }
     } else if (config.vision.keyFilename && fs.existsSync(config.vision.keyFilename)) {
       clientOptions.keyFilename = config.vision.keyFilename;
     }
-    
+
     const client = new ImageAnnotatorClient(clientOptions);
-    
+
     // 6. 요청 객체 생성 (로컬 파일 vs URL)
-    const request = createVisionRequest(imageUrl);
-    
+    const request = await createVisionRequest(imageUrl);
+
     // 7. OCR 실행 (환경별 타임아웃 적용)
     const timeout = getServiceTimeout('vision');
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Vision API timeout')), timeout);
     });
-    
+
     const visionPromise = client.textDetection(request);
     const [result] = await Promise.race([visionPromise, timeoutPromise]) as any[];
-    
+
     const detections = result.textAnnotations;
-    
+
     if (process.env.NODE_ENV === 'development') {
       console.log('Vision API request completed:', {
         requestId,
@@ -315,21 +389,21 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
         timeout
       });
     }
-    
+
     // 8. 결과 처리
-    const extractedText = detections && detections.length > 0 
+    const extractedText = detections && detections.length > 0
       ? detections[0].description || ''
       : '';
-    
+
     // 9. 결과 캐싱 (캐시가 활성화된 경우)
     if (isServiceEnabled('cache')) {
       const cacheKey = await generateCacheKey(imageUrl);
       setCachedResult(cacheKey, extractedText);
     }
-    
+
     const processingTime = Date.now() - startTime;
     const cacheStats = isServiceEnabled('cache') ? getCacheStats() : null;
-    
+
     // 10. 성공 로깅
     console.log('Vision API request successful:', {
       requestId,
@@ -352,10 +426,10 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
     });
 
     return extractedText;
-      
+
   } catch (error: any) {
     const processingTime = Date.now() - startTime;
-    
+
     console.error('Vision API request failed:', {
       requestId,
       imageUrl: maskSensitiveData(imageUrl),
@@ -367,7 +441,7 @@ export async function extractTextFromImage(imageUrl: string): Promise<string> {
       processingTime,
       success: false
     });
-    
+
     return handleVisionError(error, imageUrl);
   }
 }
@@ -380,10 +454,10 @@ function validateImagePath(imageUrl: string): void {
   if (process.env.NODE_ENV === 'test' && (imageUrl.includes('test-assets/test1.jpg') || imageUrl.includes('test-assets/test2.jpg'))) {
     return;
   }
-  
+
   const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
   const extension = path.extname(imageUrl).toLowerCase();
-  
+
   if (!validExtensions.includes(extension)) {
     throw new Error('Unsupported image format');
   }
@@ -392,14 +466,27 @@ function validateImagePath(imageUrl: string): void {
 /**
  * Vision API 요청 객체를 생성합니다.
  */
-function createVisionRequest(imageUrl: string) {
+async function createVisionRequest(imageUrl: string) {
   if (imageUrl.startsWith('http')) {
     // URL인 경우
     return { image: { source: { imageUri: imageUrl } } };
   } else {
-    // 로컬 파일인 경우
-    const imageBuffer = fs.readFileSync(imageUrl);
-    return { image: { content: imageBuffer.toString('base64') } };
+    // 로컬 파일인 경우 - Retries for potential file locking issues
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        const imageBuffer = fs.readFileSync(imageUrl);
+        return { image: { content: imageBuffer.toString('base64') } };
+      } catch (error: any) {
+        if (error.code === 'ENOENT' && retries > 1) {
+          // Wait 500ms before retry
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        retries--;
+        if (retries === 0) throw error;
+      }
+    }
+    throw new Error(`File not found after retries: ${imageUrl}`);
   }
 }
 
@@ -416,8 +503,8 @@ function generateRequestId(): string {
 function maskSensitiveData(imageUrl: string): string {
   // 파일 경로에서 민감한 정보 제거 (사용자 이름 등)
   return imageUrl.replace(/\/Users\/[^\/]+\//, '/Users/***/')
-                .replace(/C:\\Users\\[^\\]+\\/, 'C:\\Users\\***\\')
-                .replace(/\/home\/[^\/]+\//, '/home/***/');
+    .replace(/C:\\Users\\[^\\]+\\/, 'C:\\Users\\***\\')
+    .replace(/\/home\/[^\/]+\//, '/home/***/');
 }
 
 /**
@@ -458,44 +545,44 @@ function handleVisionError(error: any, imageUrl: string): never {
   if (error.message?.includes('ENOENT') || error.message?.includes('No such file')) {
     throw new Error(`File not found: ${imageUrl}`);
   }
-  
+
   // 이미지 형식 에러
   if (error.message?.includes('Unsupported image format')) {
     throw error;
   }
-  
+
   // 인증 에러
-  if (error.message?.includes('Could not load the default credentials') || 
-      error.message?.includes('GOOGLE_APPLICATION_CREDENTIALS') ||
-      (error.code === 'ENOENT' && error.path?.includes('vision.json'))) {
+  if (error.message?.includes('Could not load the default credentials') ||
+    error.message?.includes('GOOGLE_APPLICATION_CREDENTIALS') ||
+    (error.code === 'ENOENT' && error.path?.includes('vision.json'))) {
     throw new Error('Google Vision API credentials not configured. Please set GOOGLE_APPLICATION_CREDENTIALS environment variable.');
   }
-  
+
   // 할당량 초과 에러 (향상된 처리)
   if (error.code === 'QUOTA_EXCEEDED' || error.message?.includes('quota')) {
     throw new Error('Google Vision API quota exceeded. Please try again later.');
   }
-  
+
   // 잘못된 인수 에러 (손상된 이미지 등)
   if (error.code === 'INVALID_ARGUMENT') {
     throw new Error('Invalid image format or corrupted file.');
   }
-  
+
   // 서비스 사용 불가 에러
   if (error.code === 'UNAVAILABLE') {
     throw new Error('Google Vision API is temporarily unavailable. Please try again later.');
   }
-  
+
   // 요청 크기 초과 에러
   if (error.code === 'REQUEST_TOO_LARGE' || error.message?.includes('payload size exceeds')) {
     throw new Error('Image file is too large. Please use a smaller image.');
   }
-  
+
   // 속도 제한 에러
   if (error.code === 'RATE_LIMIT_EXCEEDED' || error.message?.includes('rate limit')) {
     throw new Error('API rate limit exceeded. Please try again later.');
   }
-  
+
   // 기타 에러
   throw new Error(`Vision API failed: ${error.message}`);
 }

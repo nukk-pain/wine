@@ -27,10 +27,10 @@ export function DebugInfo({ data, title = "디버그 정보" }: DebugInfoProps) 
         <span className="mr-2">{isOpen ? '🔽' : '🔍'}</span>
         {title} (개발용)
       </button>
-      
+
       {isOpen && (
         <div className="mt-3">
-          <pre className="bg-white border border-yellow-200 rounded p-3 text-xs overflow-x-auto max-h-96 overflow-y-auto">
+          <pre className="bg-black text-green-400 rounded p-4 text-xs overflow-x-auto max-h-96 overflow-y-auto font-mono border border-green-600">
             {JSON.stringify(data, null, 2)}
           </pre>
         </div>

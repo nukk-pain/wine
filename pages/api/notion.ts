@@ -40,6 +40,10 @@ async function handleNotionRequest(
   try {
     const { action, data, pageId, status, imageUrl } = req.body;
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[API /api/notion] Received request:', { action, data, pageId, status, imageUrl });
+    }
+
     if (!action) {
       return sendError(res, 'Missing action', 400);
     }
@@ -57,11 +61,24 @@ async function handleNotionRequest(
         // If data is legacy WineData or WineInfo, this might fail validation or have missing fields,
         // but our refactored client ensures NotionWineProperties.
         const validation = validateWineData(data as NotionWineProperties);
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[API /api/notion] Validation result:', validation);
+        }
+
         if (!validation.isValid) {
           return sendError(res, 'Invalid wine data', 400, validation.errors);
         }
 
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[API /api/notion] Saving to Google Sheets:', data);
+        }
+
         result = await saveWineToSheets(data as NotionWineProperties);
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[API /api/notion] Save result:', result);
+        }
         break;
 
       // case 'save_receipt': deprecated

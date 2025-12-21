@@ -142,6 +142,9 @@ export function useNotionSave(): UseNotionSaveReturn {
         data: NotionWineProperties,
         onSuccess?: () => void
     ) => {
+        console.log('[useNotionSave] saveIndividual called with itemId:', itemId);
+        console.log('[useNotionSave] data to save:', data);
+
         setIsSaving(true);
         try {
             // Here we don't have the 'item' object, just ID and data.

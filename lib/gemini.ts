@@ -12,13 +12,20 @@ const genai = new GoogleGenAI({
 // Receipt information schema
 /* ReceiptInfo removed */
 
-// Legacy interface for compatibility
+// Legacy interface for compatibility - extended to match enhanced extraction
 export interface WineData {
   name: string;
-  vintage: number;
+  vintage?: number | null;
   producer?: string;
   region?: string;
   grape_variety?: string;
+  varietal_reasoning?: string;
+  country?: string;
+  alcohol_content?: string;
+  volume?: string;
+  wine_type?: string;
+  appellation?: string;
+  notes?: string;
   [key: string]: any;
 }
 
@@ -34,55 +41,37 @@ export class GeminiService {
         console.log('🎯 [Gemini] MIME type:', mimeType);
         console.log('🤖 [Gemini] Using model:', this.model);
       }
-      const prompt = `You are a knowledgeable AI wine sommelier. Your task is to analyze a wine label image and populate a JSON object with specific information.
+      const prompt = `Analyze this wine label image and extract information into a structured JSON format.
 
-### Crucial Rule for "Varietal(품종)" field
-This is the most important instruction.
-1.  **First, try to extract** the grape varietal(s) directly from the text on the label.
-2.  **If the varietal is NOT explicitly written on the label, you MUST use your expert knowledge to INFER it** from the wine's appellation, region, or name. This is a required step.
-3.  **Provide your reasoning** in the "varietal_reasoning" field.
-4.  If the varietal cannot be extracted or reasonably inferred (e.g., for a generic table wine blend), and only then, return an empty array "[]".
+Think step-by-step:
+1. Identify all text on the label
+2. Distinguish between brand/producer name and wine product name
+3. Extract grape variety (explicit or infer from appellation/region)
+4. Identify region, country, and any special designations
 
-**Examples of required inference:**
-* If "appellation" is "Sancerre", "Varietal(품종)" must be ["Sauvignon Blanc"].
-* If "appellation" is "Barolo", "Varietal(품종)" must be ["Nebbiolo"].
-* If "appellation" is "Chablis", "Varietal(품종)" must be ["Chardonnay"].
-* If "name" or "region" includes "Chianti Classico", "Varietal(품종)" should include ["Sangiovese"].
-
-### Important Rule for "notes" field
-Extract special designations and production information visible on the label. Focus on:
-1. **Wine tier/classification**: Reserve, Grand Reserve, Gran Reserva, Riserva, Grand Cru, Premier Cru, Estate, Single Vineyard, Old Vines, etc.
-2. **Certifications**: Organic, Biodynamic, Sustainable, Vegan, Natural Wine, etc.
-3. **Production methods**: Barrel aged (with duration), Oak aged, Stainless steel, Unfiltered, Unfined, Hand-harvested, Estate bottled, etc.
-4. **Awards/Medals**: Gold Medal, Silver Medal, 90+ points, Competition awards visible on label
-5. **Special series**: Limited Edition, Special Selection, Winemaker's Reserve, etc.
-
-Format as a brief comma-separated list. If multiple items exist, include the most important ones.
-Examples:
-- "Reserve, 18 months oak aged, Organic certified"
-- "Grand Cru, Estate bottled, Gold Medal 2023"
-- "Single Vineyard, Hand-harvested, Unfiltered"
-- If none of these special designations are visible, return empty string ""
-
-### JSON Output Structure
-Return a single, clean JSON object. Do not add any text before or after the JSON.
-
+Required JSON format:
 {
-  "Name": "wine name (required)",
-  "Vintage": "year_as_number_or_null",
-  "Region/Producer": "region and/or producer combined",
-  "Price": "price_as_number_or_null",
+  "Name": "wine product name (NOT including brand/producer)",
+  "Vintage": year_or_null,
+  "Region/Producer": "producer and region (NOT wine name)",
+  "Price": null,
   "Quantity": 1,
-  "Store": "store_name_or_empty_string",
-  "Varietal(품종)": ["grape1", "grape2"],
-  "varietal_reasoning": "State how you found the varietal (e.g., \"Extracted from label\", \"Inferred from Sancerre appellation\")",
+  "Store": "",
+  "Varietal(품종)": ["array of grape varieties"],
+  "varietal_reasoning": "how you determined the variety",
   "country": "country name",
-  "alcohol_content": "alcohol % as string",
-  "volume": "bottle volume (e.g., 750ml)",
+  "alcohol_content": "percentage if visible",
+  "volume": "bottle size if visible",
   "wine_type": "Red/White/Rosé/Sparkling/Dessert",
-  "appellation": "official appellation if visible",
-  "notes": "special designations as comma-separated list (see instructions above)"
-}`;
+  "appellation": "official appellation if present",
+  "notes": "special designations: Reserve, Organic, etc."
+}
+
+Key rules:
+- Name: Product name only (e.g., "Hacienda de Sierra Bella" NOT "Las Condes Hacienda de Sierra Bella")
+- Region/Producer: Brand + region (e.g., "Las Condes, Chile")
+- Varietal: Extract from label OR infer from appellation (Sancerre→Sauvignon Blanc, Barolo→Nebbiolo, etc.)
+- Return valid JSON only, no additional text`;
 
       const contents = [
         {
@@ -103,10 +92,12 @@ Return a single, clean JSON object. Do not add any text before or after the JSON
 
       const config = {
         responseMimeType: 'application/json',
+        thinkingLevel: 'low', // Reduced thinking for faster response
       };
 
       if (process.env.NODE_ENV === 'development') {
         console.log('⚡ [Gemini] Making API request to Gemini...');
+        console.log('🧠 [Gemini] Thinking level: low (faster response)');
         console.time('⏱️ [Gemini] Wine analysis duration');
       }
 
@@ -158,29 +149,68 @@ Return a single, clean JSON object. Do not add any text before or after the JSON
 
 export const geminiService = new GeminiService();
 
-// Legacy function for compatibility - updated to use new API
+// Legacy function for compatibility - upgraded to match new extraction schema
 export async function refineWineDataWithGemini(ocrText: string): Promise<WineData> {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY environment variable is not set');
   }
 
-  const prompt = `You are a wine expert. Parse the following OCR text from a wine label and extract structured information.
-  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('\n========================================');
+    console.log('🔄 [Gemini OCR Refinement] STARTING');
+    console.log('========================================');
+    console.log('📝 OCR Text Input:');
+    console.log('---');
+    console.log(ocrText);
+    console.log('---');
+    console.log(`📊 OCR Text Length: ${ocrText.length} characters\n`);
+  }
+
+  const prompt = `Analyze this OCR text from a wine label and extract information into structured JSON.
+
 OCR Text:
 ${ocrText}
 
-Return a JSON object with the following structure:
+Think step-by-step:
+1. Identify all text elements
+2. Distinguish brand/producer from wine product name
+3. Extract or infer grape variety
+4. Identify region, country, special designations
+
+Required JSON format:
 {
-  "name": "wine name",
-  "vintage": year as number,
-  "producer": "producer name",
-  "region": "region",
-  "grape_variety": "grape variety"
+  "name": "wine product name (NOT including brand/producer)",
+  "vintage": year_or_null,
+  "producer": "producer/brand name",
+  "region": "region name",
+  "grape_variety": "grape variety (extract or infer from appellation)",
+  "varietal_reasoning": "how you determined the variety",
+  "country": "country name",
+  "alcohol_content": "alcohol % if present",
+  "volume": "bottle size if present",
+  "wine_type": "Red/White/Rosé/Sparkling/Dessert",
+  "appellation": "appellation if present",
+  "notes": "special designations: Reserve, Organic, etc."
 }
 
-Important: Return ONLY the JSON object, no additional text or explanation.`;
+Key rules:
+- name: Product name only (e.g., "Hacienda de Sierra Bella" NOT "Las Condes Hacienda de Sierra Bella")
+- producer: Brand name only (e.g., "Las Condes")
+- region/country: Separate fields (e.g., region: "Central Valley", country: "Chile")
+- grape_variety: Extract from text OR infer from appellation (Sancerre→Sauvignon Blanc, Barolo→Nebbiolo)
+- Return valid JSON only, no additional text`;
 
   try {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📤 [Gemini] SENDING PROMPT:');
+      console.log('---');
+      console.log(prompt);
+      console.log('---\n');
+      console.log('🤖 [Gemini] Model: gemini-3-flash-preview');
+      console.log('🧠 [Gemini] Thinking Level: low (faster response)');
+      console.time('⏱️ [Gemini] API Call Duration');
+    }
+
     const contents = [
       {
         role: 'user' as const,
@@ -194,6 +224,7 @@ Important: Return ONLY the JSON object, no additional text or explanation.`;
 
     const config = {
       responseMimeType: 'application/json',
+      thinkingLevel: 'low', // Reduced thinking for faster response
     };
 
     const response = await genai.models.generateContent({
@@ -202,21 +233,46 @@ Important: Return ONLY the JSON object, no additional text or explanation.`;
       contents,
     });
 
+    if (process.env.NODE_ENV === 'development') {
+      console.timeEnd('⏱️ [Gemini] API Call Duration');
+    }
+
     const text = response.text;
     if (!text) {
       throw new Error('No response from Gemini');
     }
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('\n📥 [Gemini] RAW RESPONSE:');
+      console.log('---');
+      console.log(text);
+      console.log('---\n');
+    }
+
     const parsedData = JSON.parse(text);
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ [Gemini] PARSED RESULT:');
+      console.log(JSON.stringify(parsedData, null, 2));
+      console.log('\n🎯 Key Fields:');
+      console.log('   Name:', parsedData.name);
+      console.log('   Producer:', parsedData.producer);
+      console.log('   Region:', parsedData.region);
+      console.log('   Country:', parsedData.country);
+      console.log('   Vintage:', parsedData.vintage);
+      console.log('   Grape Variety:', parsedData.grape_variety);
+      console.log('   Varietal Reasoning:', parsedData.varietal_reasoning);
+      console.log('========================================\n');
+    }
+
     // Validate the response has required fields
-    if (!parsedData.name || typeof parsedData.vintage !== 'number') {
-      throw new Error('Invalid wine data structure from Gemini');
+    if (!parsedData.name) {
+      throw new Error('Invalid wine data structure from Gemini (missing name)');
     }
 
     return parsedData;
   } catch (error) {
-    console.error('Error in refineWineDataWithGemini:', error);
+    console.error('❌ [Gemini Refinement] Error:', error);
     throw error;
   }
 }

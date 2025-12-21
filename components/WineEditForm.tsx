@@ -14,8 +14,27 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
     onCancel,
     isSubmitting
 }) => {
-    const [editedData, setEditedData] = useState<NotionWineProperties>(initialData);
+    // Normalize initialData to ensure all fields have defined values
+    const normalizedData: NotionWineProperties = {
+        Name: initialData.Name || '',
+        Vintage: initialData.Vintage || null,
+        'Region/Producer': initialData['Region/Producer'] || '',
+        Price: initialData.Price || null,
+        Quantity: initialData.Quantity || null,
+        Store: initialData.Store || '',
+        'Varietal(품종)': initialData['Varietal(품종)'] || [],
+        Image: initialData.Image || null,
+        'Country(국가)': initialData['Country(국가)'] || undefined,
+        'Appellation(원산지명칭)': initialData['Appellation(원산지명칭)'] || undefined,
+        'Notes(메모)': initialData['Notes(메모)'] || undefined
+    };
+
+    const [editedData, setEditedData] = useState<NotionWineProperties>(normalizedData);
     const [validation, setValidation] = useState<ValidationResult>({ isValid: true, errors: [], warnings: [] });
+
+    // Log initialData when component mounts or updates
+    console.log('[WineEditForm] Rendering with initialData:', initialData);
+    console.log('[WineEditForm] Normalized data:', normalizedData);
 
     // 유효성 검사 로직
     const validate = (data: NotionWineProperties): ValidationResult => {
@@ -57,27 +76,30 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
     };
 
     const handleSave = () => {
+        console.log('[WineEditForm] handleSave called, editedData:', editedData);
+        console.log('[WineEditForm] validation:', validation);
         if (validation.isValid) {
+            console.log('[WineEditForm] Calling onSave with:', editedData);
             onSave(editedData);
         }
     };
 
     return (
-        <div className="mt-3 space-y-3 bg-white p-4 rounded-xl border border-blue-200 shadow-sm">
-            <h3 className="text-sm font-bold text-gray-700 mb-2">✏️ 와인 정보 수정</h3>
+        <div className="mt-3 space-y-3 bg-wine-glass backdrop-blur-xl p-4 rounded-xl border border-wine-glassBorder shadow-wine">
+            <h3 className="text-sm font-playfair font-semibold text-wine-cream mb-2">✏️ 와인 정보 수정</h3>
 
             {/* Wine Name */}
             <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-body font-medium text-wine-creamDim mb-1">
                     와인 이름 *
                 </label>
                 <input
                     type="text"
                     value={editedData.Name}
                     onChange={(e) => handleChange('Name', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${validation.errors.some(e => e.includes('이름'))
-                            ? 'border-red-300 focus:ring-red-500'
-                            : 'border-gray-300 focus:ring-blue-500'
+                    className={`w-full px-3 py-2 bg-wine-dark/30 border rounded-lg text-sm text-wine-cream placeholder:text-wine-creamDark focus:outline-none focus:ring-2 ${validation.errors.some(e => e.includes('이름'))
+                        ? 'border-wine-red/50 focus:ring-wine-red'
+                        : 'border-wine-glassBorder focus:ring-wine-gold/50'
                         }`}
                     placeholder="와인 이름을 입력하세요"
                     disabled={isSubmitting}
@@ -87,20 +109,20 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
             {/* Vintage and Price */}
             <div className="grid grid-cols-2 gap-2">
                 <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-body font-medium text-wine-creamDim mb-1">
                         빈티지
                     </label>
                     <input
                         type="number"
                         value={editedData.Vintage || ''}
                         onChange={(e) => handleChange('Vintage', e.target.value ? parseInt(e.target.value) : null)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 bg-wine-dark/30 border border-wine-glassBorder rounded-lg text-sm text-wine-cream placeholder:text-wine-creamDark focus:outline-none focus:ring-2 focus:ring-wine-gold/50"
                         placeholder="2020"
                         disabled={isSubmitting}
                     />
                 </div>
                 <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-body font-medium text-wine-creamDim mb-1">
                         가격
                     </label>
                     <input
@@ -108,8 +130,8 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
                         step="0.01"
                         value={editedData.Price || ''}
                         onChange={(e) => handleChange('Price', e.target.value ? parseFloat(e.target.value) : null)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="0.00"
+                        className="w-full px-3 py-2 bg-wine-dark/30 border border-wine-glassBorder rounded-lg text-sm text-wine-cream placeholder:text-wine-creamDark focus:outline-none focus:ring-2 focus:ring-wine-gold/50"
+                        placeholder="0"
                         disabled={isSubmitting}
                     />
                 </div>
@@ -117,14 +139,14 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
 
             {/* Region/Producer */}
             <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-body font-medium text-wine-creamDim mb-1">
                     지역/생산자
                 </label>
                 <input
                     type="text"
                     value={editedData['Region/Producer']}
                     onChange={(e) => handleChange('Region/Producer', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 bg-wine-dark/30 border border-wine-glassBorder rounded-lg text-sm text-wine-cream placeholder:text-wine-creamDark focus:outline-none focus:ring-2 focus:ring-wine-gold/50"
                     placeholder="예: 나파 밸리, 보르도"
                     disabled={isSubmitting}
                 />
@@ -133,7 +155,7 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
             {/* Varietal and Store */}
             <div className="grid grid-cols-2 gap-2">
                 <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-body font-medium text-wine-creamDim mb-1">
                         품종
                     </label>
                     <input
@@ -143,20 +165,20 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
                             const varietals = e.target.value.split(',').map(v => v.trim()).filter(v => v);
                             handleChange('Varietal(품종)', varietals);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 bg-wine-dark/30 border border-wine-glassBorder rounded-lg text-sm text-wine-cream placeholder:text-wine-creamDark focus:outline-none focus:ring-2 focus:ring-wine-gold/50"
                         placeholder="카베르네 소비뇽"
                         disabled={isSubmitting}
                     />
                 </div>
                 <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label className="block text-xs font-body font-medium text-wine-creamDim mb-1">
                         구매처
                     </label>
                     <input
                         type="text"
                         value={editedData.Store}
                         onChange={(e) => handleChange('Store', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 bg-wine-dark/30 border border-wine-glassBorder rounded-lg text-sm text-wine-cream placeholder:text-wine-creamDark focus:outline-none focus:ring-2 focus:ring-wine-gold/50"
                         placeholder="와인샵"
                         disabled={isSubmitting}
                     />
@@ -165,14 +187,14 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
 
             {/* Validation Messages */}
             {validation.errors.length > 0 && (
-                <div className="bg-red-50 p-2 rounded text-xs text-red-600">
+                <div className="bg-wine-red/20 border border-wine-red/40 p-2 rounded-lg text-xs text-wine-red">
                     {validation.errors.map((err, idx) => (
                         <div key={idx}>⚠️ {err}</div>
                     ))}
                 </div>
             )}
             {validation.warnings && validation.warnings.length > 0 && (
-                <div className="bg-yellow-50 p-2 rounded text-xs text-yellow-600">
+                <div className="bg-wine-gold/20 border border-wine-gold/40 p-2 rounded-lg text-xs text-wine-gold">
                     {validation.warnings.map((warn, idx) => (
                         <div key={idx}>⚠️ {warn}</div>
                     ))}
@@ -184,9 +206,9 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
                 <button
                     onClick={handleSave}
                     disabled={isSubmitting || !validation.isValid}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-colors shadow-sm ${validation.isValid
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-body font-bold transition-all duration-300 shadow-wine ${validation.isValid
+                        ? 'bg-gradient-to-r from-wine-gold to-wine-goldDark text-wine-dark hover:shadow-wine-lg hover:from-wine-goldDark hover:to-wine-gold active:scale-95'
+                        : 'bg-wine-glassBorder text-wine-creamDark cursor-not-allowed opacity-50'
                         }`}
                 >
                     {isSubmitting ? '저장 중...' : '확인'}
@@ -194,7 +216,7 @@ export const WineEditForm: React.FC<WineEditFormProps> = ({
                 <button
                     onClick={onCancel}
                     disabled={isSubmitting}
-                    className="flex-1 bg-white border border-gray-300 text-gray-700 py-2 px-3 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                    className="flex-1 bg-wine-dark/50 border border-wine-glassBorder text-wine-creamDim py-2 px-3 rounded-lg text-xs font-body font-medium hover:bg-wine-dark/70 hover:border-wine-gold/30 transition-all duration-300 disabled:opacity-50"
                 >
                     취소
                 </button>

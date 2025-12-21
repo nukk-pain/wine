@@ -7,11 +7,13 @@ import { processWineImage } from '@/lib/vision';
 import { geminiService } from '@/lib/gemini';
 import { createFormidableConfig, parseFormidableError, getTempDir } from '@/lib/formidable-config';
 import { createApiHandler, sendSuccess, sendError } from '@/lib/api-utils';
+import { getConfig } from '@/lib/config';
 
-// Image storage path
-const WINE_PHOTOS_DIR = process.env.NODE_ENV === 'production'
-  ? '/volume2/web/wine/wine-photos'  // NAS path
-  : path.join(process.cwd(), 'public', 'wine-photos'); // Local path
+// Get configuration
+const appConfig = getConfig();
+
+// Image storage path - use unified config
+const WINE_PHOTOS_DIR = path.join(process.cwd(), 'public', 'wine-photos');
 
 export const config = {
   api: {
@@ -85,49 +87,40 @@ export default async function handler(
     let extractedData;
     let imageType = (type || 'auto') as 'wine_label' | 'receipt' | 'auto';
 
-    // Process with Gemini or Vision
-    if (useGemini === 'true') {
-      let imageBuffer: Buffer;
-      let mimeType: string;
+    //  CRITICAL FIX: Use PERMANENT file for processing to avoid race condition
+    // Background cleanup scripts may delete tmp files during processing
+    let processingImagePath: string;
+    let savedImagePath: string | null = null;
 
-      if (imageUrl) {
-        const response = await fetch(imageUrl);
-        if (!response.ok) throw new Error('Failed to fetch image URL');
-        imageBuffer = Buffer.from(await response.arrayBuffer());
-        mimeType = response.headers.get('content-type') || 'image/jpeg';
+    if (imageFile) {
+      // Save permanently (without deleting original yet)
+      if (!process.env.VERCEL) {
+        savedImagePath = await saveImagePermanently(imageFile, false);
+        // CRITICAL: Use the SAFE permanent file for Vision API
+        // savedImagePath is like "/wine-photos/xxx.jpg", we need absolute local path
+        processingImagePath = path.join(process.cwd(), 'public', savedImagePath.replace(/^\//, ''));
       } else {
-        imageBuffer = await fs.readFile(imageFile.filepath);
-        mimeType = imageFile.mimetype || 'image/jpeg';
+        processingImagePath = imageFile.filepath;
       }
-
-      if (imageType === 'auto') {
-        // Deprecated: Classification is skipped, default to wine_label
-        imageType = 'wine_label';
-      }
-
-      // Always extract as wine label
-      extractedData = await geminiService.extractWineInfo(imageBuffer, mimeType);
     } else {
-      // Fallback Vision
-      const imagePath = imageUrl || imageFile.filepath;
-      const visionResult = await processWineImage(imagePath);
-      extractedData = visionResult.data;
-      imageType = visionResult.imageType as any;
+      processingImagePath = imageUrl!; // Non-null assertion: imageUrl is guaranteed to exist here
+      savedImagePath = imageUrl;
     }
 
-    // Save Image Permanently (if uploaded file)
-    let savedImagePath: string | null = null;
+    // Always use two-stage process: OCR → Gemini refinement
+    // Vision API will read from file path, but we've buffered it just in case
+    const visionResult = await processWineImage(processingImagePath);
+    extractedData = visionResult.data;
+    imageType = visionResult.imageType as any;
+
+    // Clean up temp file after Vision API processing is complete
     if (imageFile) {
+      // Set Vercel path if needed (otherwise already set above)
       if (process.env.VERCEL) {
-        savedImagePath = 'stored-in-vercel-blob'; // In real usage, client already uploaded to blob if using Vercel Blob workflow? 
-        // Actually, if we received a FILE here, we are responsible for storage. 
-        // If Vercel env, we might not have persistent disk processing.
-        await fs.unlink(imageFile.filepath).catch(() => { });
-      } else {
-        savedImagePath = await saveImagePermanently(imageFile);
+        savedImagePath = 'stored-in-vercel-blob';
       }
-    } else {
-      savedImagePath = imageUrl;
+      // Delete the temp file now that Vision API is done with it
+      await fs.unlink(imageFile.filepath).catch(() => { });
     }
 
     // Return Success
@@ -155,14 +148,18 @@ function readRequestBody(req: NextApiRequest): Promise<string> {
   });
 }
 
-// Helper: Save Image
-async function saveImagePermanently(imageFile: formidable.File): Promise<string> {
+// Helper: Save Image (without deleting original)
+async function saveImagePermanently(imageFile: formidable.File, deleteOriginal = true): Promise<string> {
   await fs.mkdir(WINE_PHOTOS_DIR, { recursive: true });
   const ext = path.extname(imageFile.originalFilename || '.jpg');
-  const fileName = `wine_${Date.now()}${ext}`;
+  const fileName = `wine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}${ext}`;
   const targetPath = path.join(WINE_PHOTOS_DIR, fileName);
   await fs.copyFile(imageFile.filepath, targetPath);
-  await fs.unlink(imageFile.filepath);
+
+  // Only delete original if requested (after Vision API processing)
+  if (deleteOriginal) {
+    await fs.unlink(imageFile.filepath).catch(() => { });
+  }
 
   // Return public URL path
   // Assumes public/wine-photos is served at /wine-photos

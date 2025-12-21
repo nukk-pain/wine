@@ -24,12 +24,22 @@ export async function classifyImage(text: string): Promise<ClassificationResult>
   const wineLabelIndicators = [
     'appellation', 'château', 'chateau', 'domaine', 'vintage', 'estate',
     'wine', 'rouge', 'blanc', 'rosé', 'rose', 'sec', 'demi-sec',
+    // 주요 품종
     'cabernet', 'merlot', 'chardonnay', 'pinot', 'sauvignon',
+    'malbec', 'syrah', 'shiraz', 'tempranillo', 'sangiovese',
+    'nebbiolo', 'grenache', 'zinfandel', 'riesling', 'viognier',
+    // 주요 지역
+    'bordeaux', 'burgundy', 'champagne', 'tuscany', 'rioja',
+    'mendoza', 'napa', 'sonoma', 'barolo', 'chianti',
     'bordeaux', 'burgundy', 'champagne', 'contrôlée', 'controlee',
+    // 국가명
+    'france', 'italia', 'spain', 'argentina', 'chile',
+    'australia', 'california', 'oregon', 'washington',
+    // 기타 지표
     'vol', 'ml', 'cl', 'alcohol', '도', '년산', '와인', 'winery',
     'producer', 'harvest', 'reserve', 'grand', 'cru', 'premier',
     'soave', 'farina', 'doc', 'docg', 'denominazione', 'origine',
-    'controllata', 'prodotto', 'italia', 'garganega'
+    'controllata', 'prodotto', 'garganega'
   ];
   
   const receiptIndicators = [
@@ -61,11 +71,30 @@ export async function classifyImage(text: string): Promise<ClassificationResult>
   // 가중치 계산
   const wineScore = calculateWineScore(normalizedText, foundWineIndicators);
   const receiptScore = calculateReceiptScore(normalizedText, foundReceiptIndicators);
-  
-  // 분류 결정 (임계값 조정)
-  const threshold = 0.4;
+
+  // 디버깅 로그
+  console.log('Image classification scoring:', {
+    wineScore,
+    receiptScore,
+    foundWineIndicators,
+    foundReceiptIndicators,
+    textLength: normalizedText.length,
+    textPreview: normalizedText.substring(0, 100)
+  });
+
+  // 분류 결정 (임계값 낮춤 - 미니멀 라벨 대응)
+  const threshold = 0.2; // 0.4 -> 0.2로 낮춤
   const confidenceGap = Math.abs(wineScore - receiptScore);
-  
+
+  console.log('Image classification decision:', {
+    threshold,
+    wineScore,
+    receiptScore,
+    winePassesThreshold: wineScore > threshold,
+    receiptPassesThreshold: receiptScore > threshold,
+    confidenceGap
+  });
+
   if (wineScore > receiptScore && wineScore > threshold) {
     return {
       type: ImageType.WINE_LABEL,

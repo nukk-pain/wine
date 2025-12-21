@@ -180,7 +180,7 @@ export const cacheConfig: Record<Environment, CacheConfig> = {
  */
 export const uploadConfig: Record<Environment, UploadConfig> = {
   development: {
-    uploadDir: process.env.UPLOAD_DIR || './uploads',
+    uploadDir: process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'wine-photos'),
     maxFileSize: 10 * 1024 * 1024, // 10MB
     allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
     imageStorage: {
@@ -190,7 +190,7 @@ export const uploadConfig: Record<Environment, UploadConfig> = {
       },
       local: {
         enabled: true,
-        path: './uploads'
+        path: path.join(process.cwd(), 'public', 'wine-photos')
       }
     }
   },
@@ -205,7 +205,7 @@ export const uploadConfig: Record<Environment, UploadConfig> = {
       },
       local: {
         enabled: true,
-        path: '/tmp/uploads'
+        path: '/tmp/uploads' // Vercel uses Blob storage, this is fallback only
       }
     }
   },

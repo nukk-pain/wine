@@ -53,7 +53,9 @@
       "Bash(git merge:*)",
       "Bash(git reset:*)",
       "Skill(frontend-design)",
-      "Skill(frontend-design:*)"
+      "Skill(frontend-design:*)",
+      "Bash(dir:*)",
+      "Bash(timeout 20s npm run dev:*)"
     ],
     "deny": []
   }

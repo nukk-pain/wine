@@ -104,15 +104,13 @@ export function WineBatchResultDisplay({
   };
 
   const handleSaveEdit = (id: string, updatedData: NotionWineProperties) => {
+    console.log('[WineBatchResultDisplay] handleSaveEdit (local update) for id:', id);
+
     if (onSaveIndividual) {
-      // Optimistically update or wait for promise?
-      // Since props update comes from parent, we just call the handler.
-      // But WineEditForm waits for onSave to return? No, onSave is void.
-      // We assume parent will update the item.
-      // But onSaveIndividual takes (itemId, wineData) and returns Promise<boolean>
+      // This now only updates local state, not sending to Google Sheets
       onSaveIndividual(id, updatedData).then(success => {
         if (success) {
-          handleCancelEdit(id);
+          handleCancelEdit(id); // Close edit mode
         }
       });
     }

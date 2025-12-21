@@ -41,10 +41,14 @@ async function getGoogleSheetsClient() {
 }
 
 export async function saveWineToSheets(data: NotionWineProperties): Promise<{ id: string; url: string }> {
+    if (process.env.NODE_ENV === 'development') {
+        console.log('[Google Sheets] saveWineToSheets called with:', data);
+    }
+
     const sheets = await getGoogleSheetsClient();
 
     // Map NotionWineProperties to Sheet Row Array
-    // Headers: Name, Vintage, Region/Producer, Varietal, Price, Quantity, Store, Purchase Date, Status, Country, Appellation, Notes, Image URL, Notion ID
+    // Headers: Name, Vintage, Region/Producer, Varietal, Price, Quantity, Store, Purchase Date, Status, Country, Appellation, Notes
 
     const row = [
         data.Name,
@@ -55,23 +59,30 @@ export async function saveWineToSheets(data: NotionWineProperties): Promise<{ id
         data.Quantity || 1,
         data.Store || '',
         data['Purchase date'] || new Date().toISOString().split('T')[0],
-        data.Status || 'In Stock', // Default to 'In Stock'
+        data.Status || 'In Stock',
         data['Country(국가)'] || '',
         data['Appellation(원산지명칭)'] || '',
-        data['Notes(메모)'] || '',
-        data.Image || '',
-        `sheet_${Date.now()}` // Generate a pseudo-ID
+        data['Notes(메모)'] || ''
     ];
+
+    if (process.env.NODE_ENV === 'development') {
+        console.log('[Google Sheets] Mapped row data:', row);
+    }
 
     try {
         const response = await sheets.spreadsheets.values.append({
             spreadsheetId: GOOGLE_SHEET_ID,
-            range: 'WineList!A2', // Append after header
+            range: 'WineList!A:L', // 12 columns: Name to Notes
             valueInputOption: 'USER_ENTERED',
+            insertDataOption: 'INSERT_ROWS', // Ensure new rows are inserted
             requestBody: {
                 values: [row]
             }
         });
+
+        if (process.env.NODE_ENV === 'development') {
+            console.log('[Google Sheets] API response:', response.data);
+        }
 
         const updatedRange = response.data.updates?.updatedRange || '';
         // Extract row number from range (e.g. "WineList!A134:N134") to build a link

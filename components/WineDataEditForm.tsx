@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NotionWineProperties } from '@/types';
 
 interface WineDataEditFormProps {
@@ -16,6 +16,12 @@ export default function WineDataEditForm({
 }: WineDataEditFormProps) {
   const [formData, setFormData] = useState<NotionWineProperties>(initialData);
   const [errors, setErrors] = useState<string[]>([]);
+
+  // Sync formData with initialData when it changes
+  useEffect(() => {
+    console.log('[WineDataEditForm] initialData changed:', initialData);
+    setFormData(initialData);
+  }, [initialData]);
 
   const handleInputChange = (field: keyof NotionWineProperties, value: any) => {
     setFormData(prev => ({
@@ -61,6 +67,8 @@ export default function WineDataEditForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    console.log('[WineDataEditForm] Submitting formData:', formData);
 
     if (validateForm()) {
       onSave(formData);
@@ -180,7 +188,7 @@ export default function WineDataEditForm({
           </label>
           <input
             type="text"
-            value={formData['Varietal(품종)'].join(', ')}
+            value={(formData['Varietal(품종)'] || []).join(', ')}
             onChange={(e) => handleVarietalChange(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="e.g., Cabernet Sauvignon, Merlot"
