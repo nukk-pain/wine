@@ -254,9 +254,18 @@ function buildOcrPrompt(cleanOcr: string, hints: ExtractHints): string {
 
 function buildVisionPrompt(): string {
     return [
-        'Extract wine label info. JSON only.',
-        'name=product only; infer grapes if needed.',
-        'null if unknown.',
+        'Extract wine info from label image. Return JSON only.',
+        '',
+        'REQUIRED FIELDS:',
+        '- Name: wine product name (NOT producer)',
+        '- Region/Producer: "Producer, Region" format',
+        '- Varietal(품종): array of grape varieties',
+        '- Vintage: year (number) or null',
+        '',
+        'RULES:',
+        '- If no product name, use: appellation + style (e.g., "Cava Brut")',
+        '- Infer grapes from region if not visible',
+        '- Use null for unknown fields',
     ].join('\n');
 }
 
