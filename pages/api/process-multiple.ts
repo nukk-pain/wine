@@ -1,7 +1,7 @@
 // pages/api/process-multiple.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { geminiService } from '@/lib/gemini';
-import { processWineImage } from '@/lib/vision';
+import { geminiService, loadImageBuffer, getMimeType } from '@/lib/gemini';
+// import { processWineImage } from '@/lib/vision';  // DEPRECATED - Vision-Only 전환
 
 interface ImageProcessRequest {
   id: string;
@@ -109,29 +109,57 @@ async function processSingleImage(
     let imageType = imageRequest.type as 'wine_label' | 'receipt' | 'auto';
 
     if (useGemini) {
-      // Use Gemini API for processing
+      // Vision-Only: Gemini API 직접 호출
+      console.log('🎯 [Vision-Only] Processing image...');
+
+      // [CONFIRMED] 영수증은 더 이상 지원하지 않음
+      if (imageRequest.type === 'receipt') {
+        throw new Error('Receipt parsing is deprecated and not supported.');
+      }
+
+      // auto 타입은 wine_label로 처리
       if (imageType === 'auto') {
-        // Deprecated: Classification is skipped, default to wine_label
         imageType = 'wine_label';
       }
 
-      // Extract information based on type
-      if (imageType === 'wine_label') {
-        const result = await geminiService.extractWineInfo(imageBuffer, mimeType);
+      const result = await geminiService.extractWineInfo(imageBuffer, mimeType);
 
-        if (!result.ok) {
-          console.warn(`Gemini validation failed for ${imageRequest.id}:`, result.reason);
-          // Use data anyway
-        }
-
-        extractedData = result.data;
-      } else {
-        // Fallback for deprecated 'receipt' type if it gets passed
-        console.warn('Receipt processing is deprecated. Skipping.');
-        extractedData = null;
+      if (!result.ok) {
+        console.warn(`⚠️ [Vision-Only] Validation warning for ${imageRequest.id}:`, result.reason);
       }
+
+      // WineInfo → 필요한 형식으로 변환
+      extractedData = {
+        Name: result.data.Name,
+        name: result.data.Name,
+        Vintage: result.data.Vintage,
+        vintage: result.data.Vintage,
+        'Region/Producer': result.data['Region/Producer'],
+        'Varietal(품종)': result.data['Varietal(품종)'] || [],
+        Price: null,                                            // 사용자 입력
+        price: null,
+        Quantity: 1,                                             // [CONFIRMED] 기본값 1 고정
+        quantity: 1,
+        Store: '',                                               // 사용자 입력
+        'Purchase date': new Date().toISOString().split('T')[0], // [CONFIRMED] 오늘 날짜 고정
+        Status: 'In Stock',                                      // [CONFIRMED] 기본값 In Stock
+        'Country(국가)': result.data.country,
+        country: result.data.country,
+        'Appellation(원산지명칭)': result.data.appellation,
+        appellation: result.data.appellation,
+        'Notes(메모)': result.data.notes,
+        notes: result.data.notes,
+        wine_type: result.data.wine_type,
+        alcohol_content: result.data.alcohol_content,
+        volume: result.data.volume,
+        varietal_reasoning: result.data.varietal_reasoning,
+      };
+
+      console.log('✅ [Vision-Only] Extracted:', extractedData.Name);
     } else {
-      // Use existing OCR-based processing
+      // DEPRECATED: OCR 기반 처리 (롤백용으로 유지)
+      console.warn('⚠️ [DEPRECATED] Using OCR-based processing. Consider switching to Vision-Only.');
+      const { processWineImage } = await import('@/lib/vision');
       const visionResult = await processWineImage(imageRequest.url);
       extractedData = visionResult.data;
       imageType = visionResult.imageType as 'wine_label' | 'receipt';

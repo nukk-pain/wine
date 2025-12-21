@@ -1,3 +1,14 @@
+/*
+ * ============================================================
+ * DEPRECATED: Vision-Only 아키텍처로 전환
+ * 
+ * 이 파일의 함수들은 더 이상 적극 사용되지 않습니다.
+ * API 엔드포인트에서 geminiService.extractWineInfo()를 직접 호출합니다.
+ * 
+ * 롤백 시 사용할 수 있도록 코드는 유지합니다.
+ * ============================================================
+ */
+
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { classifyImage, ImageType } from './parsers/image-classifier';
 import { parseWineLabel } from './parsers/wine-label';

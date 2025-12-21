@@ -6,6 +6,46 @@ const genai = new GoogleGenAI({
 });
 
 // ============================================================
+// Vision-Only System Instruction
+// ============================================================
+
+function getSystemInstruction(): string {
+    return `You are an expert wine label analyzer with deep knowledge of:
+- Global wine regions and appellations
+- Wine terminology and classifications
+- Grape varieties and their regional associations
+- Label reading conventions across different countries
+
+CRITICAL RULES:
+1. PRODUCER vs NAME distinction is mandatory
+   - Producer = Winery/Château/Domaine/Estate/Brand
+   - Name = Product/Cuvée/Wine name
+   - They are NEVER the same
+
+2. For minimal labels with only brand + type:
+   - Producer = Brand name
+   - Name = Appellation + Style/Designation
+   - Example: "BONA VAL CAVA BRUT" → Producer:"BONA VAL", Name:"Cava Brut"
+
+3. Grape variety inference:
+   - If grapes visible on label: use exact text
+   - If not visible: infer from appellation (Barolo→Nebbiolo, Chablis→Chardonnay)
+   - If uncertain: return reasonable candidates with reasoning
+
+4. Quality over speed:
+   - Read ALL visible text on the label
+   - Consider label design, colors, symbols
+   - Use contextual clues (bottle shape, capsule, etc.)
+
+5. Notes field:
+   - Include wine designation, style, special features
+   - DO NOT include URLs or web links
+   - Keep concise and informative
+
+OUTPUT: Valid JSON matching exact schema, no markdown formatting.`;
+}
+
+// ============================================================
 // 타입 정의
 // ============================================================
 
@@ -253,20 +293,18 @@ function buildOcrPrompt(cleanOcr: string, hints: ExtractHints): string {
 }
 
 function buildVisionPrompt(): string {
-    return [
-        'Extract wine info from label image. Return JSON only.',
-        '',
-        'REQUIRED FIELDS:',
-        '- Name: wine product name (NOT producer)',
-        '- Region/Producer: "Producer, Region" format',
-        '- Varietal(품종): array of grape varieties',
-        '- Vintage: year (number) or null',
-        '',
-        'RULES:',
-        '- If no product name, use: appellation + style (e.g., "Cava Brut")',
-        '- Infer grapes from region if not visible',
-        '- Use null for unknown fields',
-    ].join('\n');
+    return `Analyze this wine label image and extract structured information.
+
+PROCESS:
+1. Identify PRODUCER (winery/brand) and PRODUCT NAME (cuvée/designation)
+2. Find VINTAGE, REGION/APPELLATION, GRAPE VARIETIES
+3. Check for ALCOHOL %, VOLUME, WINE TYPE indicators
+
+OUTPUT REQUIREMENTS:
+- Return valid JSON only
+- Follow exact schema fields
+- Include varietal_reasoning explaining grape source
+- Notes: designations/style only, NO URLs`;
 }
 
 // ============================================================
@@ -278,12 +316,35 @@ function buildGenConfig(
     thinkingLevel: ThinkingLevel = ThinkingLevel.MINIMAL
 ) {
     return {
-        responseMimeType: 'application/json',  // 필수
-        responseJsonSchema: schema,             // responseSchema와 동시 사용 금지
-        thinkingConfig: { thinkingLevel },      // Gemini 3 Flash용
+        responseMimeType: 'application/json',
+        responseJsonSchema: schema,
+        thinkingConfig: { thinkingLevel },
         temperature: 0.2,
         candidateCount: 1,
         maxOutputTokens: 350,
+    };
+}
+
+/**
+ * Vision-Only용 Config (HIGH thinking level 기본, System Instruction 포함)
+ */
+function buildVisionGenConfig(schema: Record<string, any>) {
+    return {
+        responseMimeType: 'application/json',
+        responseJsonSchema: schema,
+        systemInstruction: getSystemInstruction(),
+        thinkingConfig: {
+            thinkingLevel: ThinkingLevel.HIGH,  // 예시 없이 모델이 직접 추론
+        },
+        // mediaResolution: 'high',  // SDK 미지원 옵션 - 주석 처리
+        tools: [
+            {
+                googleSearch: {},  // 와인 정보 검증용
+            },
+        ],
+        temperature: 0.1,
+        candidateCount: 1,
+        maxOutputTokens: 600,
     };
 }
 
@@ -358,18 +419,17 @@ export class GeminiService {
     private model = DEFAULT_MODEL;
 
     /**
-     * [수정] Result<T> 반환 - 검증 실패 시 ok: false + reason
-     * [수정] prompt/config 1회 생성, level만 변경하여 재시도
+     * Vision-Only 와인 정보 추출 (HIGH thinking level 단일 호출)
+     * System Instruction + Google Search tool 사용
      */
     async extractWineInfo(
         imageBuffer: Buffer,
         mimeType: string
     ): Promise<Result<WineInfo>> {
         try {
-            devLog('🍷 [Vision] Starting...');
+            console.log('🍷 [Vision-Only] Starting Gemini Vision analysis...');
             devTime('⏱️ [Vision]');
 
-            // 프롬프트 1회 생성
             const prompt = buildVisionPrompt();
             const contents = [
                 {
@@ -381,48 +441,31 @@ export class GeminiService {
                 },
             ];
 
-            // 1차: MINIMAL
-            let response = await genai.models.generateContent({
+            // Vision-Only: HIGH thinking level 단일 호출
+            const response = await genai.models.generateContent({
                 model: this.model,
-                config: buildGenConfig(wineInfoJsonSchema, ThinkingLevel.MINIMAL),
+                config: buildVisionGenConfig(wineInfoJsonSchema),
                 contents,
             });
 
-            let text = response.text;
-            if (!text) throw new Error('No response');
+            const text = response.text;
+            if (!text) throw new Error('No response from Gemini Vision');
 
-            let result = safeJsonParse<WineInfo>(text);
-            let validation = validateWineInfo(result);
-
-            // 검증 실패 → 2차: LOW (같은 contents 재사용)
-            if (!validation.valid) {
-                devLog(`⚠️ [Vision] Retry with LOW: ${validation.reason}`);
-
-                response = await genai.models.generateContent({
-                    model: this.model,
-                    config: buildGenConfig(wineInfoJsonSchema, ThinkingLevel.LOW),
-                    contents,
-                });
-
-                text = response.text;
-                if (!text) throw new Error('No response on retry');
-
-                result = safeJsonParse<WineInfo>(text);
-                validation = validateWineInfo(result);
-            }
+            const result = safeJsonParse<WineInfo>(text);
+            const validation = validateWineInfo(result);
 
             devTimeEnd('⏱️ [Vision]');
 
             if (!validation.valid) {
-                devLog(`❌ [Vision] Still invalid: ${validation.reason}`);
+                console.warn(`⚠️ [Vision-Only] Validation warning: ${validation.reason}`);
                 return { ok: false, data: result, reason: validation.reason! };
             }
 
-            devLog('✅ [Vision] OK');
+            console.log('✅ [Vision-Only] Success:', result.Name);
             return { ok: true, data: result };
 
         } catch (error) {
-            devError('❌ [Vision]', error);
+            devError('❌ [Vision-Only]', error);
             throw error;
         }
     }
@@ -431,12 +474,62 @@ export class GeminiService {
 export const geminiService = new GeminiService();
 
 // ============================================================
-// 10. OCR Refinement
+// 10. Image Loading Utilities (Vision-Only용)
 // ============================================================
 
 /**
- * [수정] compact/hints/prompt 1회 생성 → level만 변경 재시도
- * [수정] Result<T> 반환
+ * 이미지 URL에서 Buffer 로딩 (HTTP URL 또는 로컬 파일)
+ */
+export async function loadImageBuffer(imageUrl: string): Promise<Buffer> {
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        const response = await fetch(imageUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.statusText}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+    } else {
+        const fs = require('fs').promises;
+        const path = require('path');
+        const filePath = imageUrl.startsWith('/')
+            ? imageUrl
+            : path.join(process.cwd(), 'public', imageUrl);
+        return await fs.readFile(filePath);
+    }
+}
+
+/**
+ * 이미지 URL에서 MIME 타입 추출
+ */
+export function getMimeType(imageUrl: string): string {
+    const ext = imageUrl.split('.').pop()?.toLowerCase();
+    const mimeTypes: Record<string, string> = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'webp': 'image/webp',
+        'gif': 'image/gif',
+    };
+    return mimeTypes[ext || 'jpg'] || 'image/jpeg';
+}
+
+// ============================================================
+// 11. OCR Refinement (DEPRECATED - Vision-Only 전환)
+// ============================================================
+
+/*
+ * ============================================================
+ * DEPRECATED: Vision-Only 아키텍처로 전환됨
+ * 
+ * 이 함수는 더 이상 적극 사용되지 않습니다.
+ * API 엔드포인트에서 geminiService.extractWineInfo()를 직접 호출합니다.
+ * 
+ * 롤백이 필요한 경우를 위해 코드는 유지됩니다.
+ * ============================================================
+ */
+
+/**
+ * @deprecated Vision-Only 전환으로 사용 안 함. geminiService.extractWineInfo() 사용 권장
  */
 export async function refineWineDataWithGemini(
     ocrText: string
@@ -446,7 +539,8 @@ export async function refineWineDataWithGemini(
     }
 
     try {
-        devLog('🔄 [OCR] Starting...');
+        console.log('🔄 [Gemini OCR] Starting refinement...');
+        console.log('📊 [Gemini OCR] Input length:', ocrText.length, 'characters');
         devTime('⏱️ [OCR]');
 
         // 1회만 계산
@@ -454,14 +548,16 @@ export async function refineWineDataWithGemini(
         const hints = extractHintsFromText(compact);
         const prompt = buildOcrPrompt(compact, hints);
 
-        devLog(`📝 [OCR] ${ocrText.length}→${compact.length} chars`);
-        devLog(`🎯 [OCR] Hints: ${formatHints(hints)}`);
+        console.log('📝 [Gemini OCR] Compacted:', ocrText.length, '→', compact.length, 'chars');
+        console.log('🎯 [Gemini OCR] Hints:', formatHints(hints));
+        console.log('📤 [Gemini OCR] Prompt preview:', prompt.substring(0, 200));
 
         const contents = [
             { role: 'user' as const, parts: [{ text: prompt }] },
         ];
 
         // 1차: MINIMAL
+        console.log('⚡ [Gemini OCR] Calling API with MINIMAL thinking...');
         let response = await genai.models.generateContent({
             model: DEFAULT_MODEL,
             config: buildGenConfig(wineDataJsonSchema, ThinkingLevel.MINIMAL),
@@ -469,14 +565,23 @@ export async function refineWineDataWithGemini(
         });
 
         let text = response.text;
+        console.log('📥 [Gemini OCR] Response received, length:', text?.length || 0);
+        console.log('📥 [Gemini OCR] Response preview:', text?.substring(0, 300));
+
         if (!text) throw new Error('No response');
 
         let result = safeJsonParse<WineData>(text);
+        console.log('✅ [Gemini OCR] Parsed result:', JSON.stringify({
+            name: result.name,
+            producer: result.producer,
+            vintage: result.vintage,
+            grape_variety: result.grape_variety
+        }));
         let validation = validateWineData(result);
 
         // 검증 실패 → 2차: LOW
         if (!validation.valid) {
-            devLog(`⚠️ [OCR] Retry with LOW: ${validation.reason}`);
+            console.log(`⚠️ [Gemini OCR] Validation failed: ${validation.reason}, retrying with LOW...`);
 
             response = await genai.models.generateContent({
                 model: DEFAULT_MODEL,
@@ -485,20 +590,27 @@ export async function refineWineDataWithGemini(
             });
 
             text = response.text;
+            console.log('📥 [Gemini OCR] Retry response:', text?.substring(0, 300));
             if (!text) throw new Error('No response on retry');
 
             result = safeJsonParse<WineData>(text);
+            console.log('✅ [Gemini OCR] Retry result:', JSON.stringify({
+                name: result.name,
+                producer: result.producer
+            }));
             validation = validateWineData(result);
         }
 
         devTimeEnd('⏱️ [OCR]');
 
         if (!validation.valid) {
-            devLog(`❌ [OCR] Still invalid: ${validation.reason}`);
+            console.log(`❌ [Gemini OCR] Still invalid after retry: ${validation.reason}`);
+            console.log('❌ [Gemini OCR] Final data:', JSON.stringify(result));
             return { ok: false, data: result, reason: validation.reason! };
         }
 
-        devLog('✅ [OCR] OK');
+        console.log('✅ [Gemini OCR] Validation successful!');
+        console.log('✅ [Gemini OCR] Final result:', JSON.stringify(result, null, 2));
         return { ok: true, data: result };
 
     } catch (error) {

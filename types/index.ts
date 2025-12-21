@@ -48,6 +48,7 @@ export interface WineInfo extends NotionWineProperties {
     wine_type?: string;
     appellation?: string;
     notes?: string;
+    varietal_reasoning?: string;  // Vision-Only: 품종 추론 근거
 
     // Legacy fields (optional, for backward compatibility if needed)
     name?: string;
