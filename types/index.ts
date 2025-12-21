@@ -10,7 +10,7 @@
 // =============================================================================
 
 /** Supported image classification types */
-export type ImageType = 'wine_label' | 'receipt' | 'unknown';
+export type ImageType = 'wine_label' | 'unknown';
 
 // =============================================================================
 // WINE DATA TYPES
@@ -40,38 +40,23 @@ export interface NotionWineProperties {
  * Wine info extracted from AI analysis
  * Used by Gemini service for wine label extraction
  */
-export interface WineInfo {
-    name?: string;
-    vintage?: number;
-    producer?: string;
-    region?: string;
-    grape_variety?: string;
+export interface WineInfo extends NotionWineProperties {
+    // Additional fields that might be extracted but not stored in Notion
     country?: string;
     alcohol_content?: string;
     volume?: string;
     wine_type?: string;
     appellation?: string;
     notes?: string;
-}
 
-/**
- * Receipt info extracted from AI analysis
- * Used by Gemini service for receipt extraction
- */
-export interface ReceiptInfo {
-    store_name: string;
-    purchase_date?: string;
-    items: ReceiptItem[];
-    total_amount?: number;
-    currency?: string;
-}
-
-export interface ReceiptItem {
-    wine_name: string;
-    quantity: number;
-    price: number;
+    // Legacy fields (optional, for backward compatibility if needed)
+    name?: string;
     vintage?: number;
+    producer?: string;
+    region?: string;
+    grape_variety?: string;
 }
+
 
 /**
  * @deprecated Use NotionWineProperties instead
@@ -89,21 +74,6 @@ export interface LegacyWineData {
     Status?: string;
 }
 
-/**
- * @deprecated Use ReceiptInfo instead
- * Legacy interface maintained for backwards compatibility
- */
-export interface LegacyReceiptData {
-    store: string;
-    date: string;
-    items: Array<{
-        name: string;
-        price: number;
-        quantity: number;
-        vintage?: number;
-    }>;
-    total: number;
-}
 
 // =============================================================================
 // API RESPONSE TYPES
@@ -137,12 +107,12 @@ export interface UploadResponse {
 }
 
 /** Process endpoint response */
+// API Response for process endpoint
 export interface ProcessResponse {
-    imageType: ImageType;
-    wines?: WineInfo[];
-    receiptData?: ReceiptInfo;
-    ocrText?: string;
-    imageClassification?: string;
+    type: ImageType;
+    extractedData: WineInfo;
+    uploadedUrl?: string; // Standardized URL for the uploaded/saved image
+    savedImagePath?: string; // Legacy/Internal path
     notionPageId?: string;
     notionUrl?: string;
 }
@@ -175,7 +145,7 @@ export interface BatchProcessResult {
     fileName: string;
     success: boolean;
     imageType?: ImageType;
-    data?: WineInfo | ReceiptInfo;
+    data?: WineInfo;
     notionPageId?: string;
     error?: string;
 }
@@ -188,6 +158,7 @@ export interface BatchProcessResult {
 export type ProcessingStatus =
     | 'pending'
     | 'uploading'
+    | 'uploaded'
     | 'processing'
     | 'completed'
     | 'error'
@@ -201,13 +172,14 @@ export interface ImageProcessingItem {
     preview: string;
     status: ProcessingStatus;
     uploadedUrl?: string;
-    extractedData?: WineInfo | ReceiptInfo;
+    extractedData?: WineInfo;
     imageType?: ImageType;
     error?: string;
     notionResult?: {
         id: string;
         url: string;
     };
+    progress?: number;
 }
 
 /** Validation result for wine data */
@@ -225,7 +197,7 @@ export interface ValidationResult {
 export interface ProcessedImageResult {
     imageType: ImageType;
     confidence: number;
-    data: WineInfo | ReceiptInfo | null;
+    data: WineInfo | null;
     rawText: string;
 }
 

@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { NotionWineProperties } from './notion-schema';
+import { WineInfo } from '@/types';
 
 // Initialize Gemini API with new package
 const genai = new GoogleGenAI({
@@ -7,29 +7,10 @@ const genai = new GoogleGenAI({
 });
 
 // Wine information schema - updated to match Notion properties exactly
-export interface WineInfo extends NotionWineProperties {
-  // Additional fields that might be extracted but not stored in Notion
-  country?: string;
-  alcohol_content?: string;
-  volume?: string;
-  wine_type?: string;
-  appellation?: string;
-  notes?: string;
-}
+/* WineInfo imported from @/types */
 
 // Receipt information schema
-export interface ReceiptInfo {
-  store_name: string;
-  purchase_date?: string;
-  items: Array<{
-    wine_name: string;
-    quantity: number;
-    price: number;
-    vintage?: number;
-  }>;
-  total_amount?: number;
-  currency?: string;
-}
+/* ReceiptInfo removed */
 
 // Legacy interface for compatibility
 export interface WineData {
@@ -149,7 +130,7 @@ Return a single, clean JSON object. Do not add any text before or after the JSON
       console.log('🔍 [Gemini] Raw response preview:', text.substring(0, 500));
 
       const wineInfo = JSON.parse(text) as WineInfo;
-      
+
       if (process.env.NODE_ENV === 'development') {
         console.log('🎉 [Gemini] Successfully parsed wine info:');
         console.log('   Raw parsed data:', JSON.stringify(wineInfo, null, 2));
@@ -170,168 +151,9 @@ Return a single, clean JSON object. Do not add any text before or after the JSON
     }
   }
 
-  async extractReceiptInfo(imageBuffer: Buffer, mimeType: string): Promise<ReceiptInfo> {
-    try {
-      // Development logging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🧾 [Gemini] Starting receipt analysis...');
-        console.log('📊 [Gemini] Image size:', imageBuffer.length, 'bytes');
-        console.log('🎯 [Gemini] MIME type:', mimeType);
-      }
-      const prompt = `Analyze this receipt image and extract wine purchase information:
-      - Store name
-      - Purchase date
-      - Wine items (name, quantity, price, vintage if mentioned)
-      - Total amount
-      - Currency
-      
-      Return the information in JSON format:
-      {
-        "store_name": "store name",
-        "purchase_date": "date or null",
-        "items": [
-          {
-            "wine_name": "wine name",
-            "quantity": 1,
-            "price": 0.00,
-            "vintage": year or null
-          }
-        ],
-        "total_amount": 0.00,
-        "currency": "USD or other"
-      }
-      
-      Only include items that appear to be wine or alcohol. If you cannot find specific information, use null.`;
+  /* extractReceiptInfo removed for deprecation */
 
-      const contents = [
-        {
-          role: 'user' as const,
-          parts: [
-            {
-              text: prompt,
-            },
-            {
-              inlineData: {
-                data: imageBuffer.toString('base64'),
-                mimeType: mimeType,
-              },
-            },
-          ],
-        },
-      ];
-
-      const config = {
-        responseMimeType: 'application/json',
-      };
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('⚡ [Gemini] Making API request for receipt analysis...');
-        console.time('⏱️ [Gemini] Receipt analysis duration');
-      }
-
-      const response = await genai.models.generateContent({
-        model: this.model,
-        config,
-        contents,
-      });
-
-      if (process.env.NODE_ENV === 'development') {
-        console.timeEnd('⏱️ [Gemini] Receipt analysis duration');
-        console.log('✅ [Gemini] Received response from Gemini API');
-      }
-
-      const text = response.text;
-      if (!text) {
-        throw new Error('No response from Gemini');
-      }
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('📝 [Gemini] Raw response length:', text.length, 'characters');
-      }
-
-      const receiptInfo = JSON.parse(text) as ReceiptInfo;
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🎉 [Gemini] Successfully parsed receipt info:');
-        console.log('   Store:', receiptInfo.store_name);
-        console.log('   Items count:', receiptInfo.items?.length || 0);
-        console.log('   Total amount:', receiptInfo.total_amount);
-      }
-
-      return receiptInfo;
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('❌ [Gemini] Receipt analysis error:', error);
-        console.error('   Error type:', error instanceof Error ? error.constructor.name : typeof error);
-        console.error('   Error message:', error instanceof Error ? error.message : String(error));
-      }
-      throw error;
-    }
-  }
-
-  async classifyImage(imageBuffer: Buffer, mimeType: string): Promise<'wine_label' | 'receipt' | 'unknown'> {
-    try {
-      // Development logging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 [Gemini] Starting image classification...');
-        console.log('📊 [Gemini] Image size:', imageBuffer.length, 'bytes');
-      }
-      const prompt = `Look at this image and classify it as one of the following:
-      1. "wine_label" - if it's a wine bottle label
-      2. "receipt" - if it's a purchase receipt or invoice
-      3. "unknown" - if it's neither
-      
-      Respond with only one word: wine_label, receipt, or unknown`;
-
-      const contents = [
-        {
-          role: 'user' as const,
-          parts: [
-            {
-              text: prompt,
-            },
-            {
-              inlineData: {
-                data: imageBuffer.toString('base64'),
-                mimeType: mimeType,
-              },
-            },
-          ],
-        },
-      ];
-
-      const config = {
-        responseMimeType: 'text/plain',
-      };
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('⚡ [Gemini] Making classification request...');
-      }
-
-      const response = await genai.models.generateContent({
-        model: this.model,
-        config,
-        contents,
-      });
-
-      const classification = response.text?.trim().toLowerCase();
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🏷️ [Gemini] Classification result:', classification);
-      }
-      
-      if (classification === 'wine_label' || classification === 'receipt') {
-        return classification;
-      }
-      
-      return 'unknown';
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('❌ [Gemini] Classification error:', error);
-      }
-      return 'unknown';
-    }
-  }
+  /* classifyImage removed for deprecation */
 }
 
 export const geminiService = new GeminiService();
@@ -386,7 +208,7 @@ Important: Return ONLY the JSON object, no additional text or explanation.`;
     }
 
     const parsedData = JSON.parse(text);
-    
+
     // Validate the response has required fields
     if (!parsedData.name || typeof parsedData.vintage !== 'number') {
       throw new Error('Invalid wine data structure from Gemini');

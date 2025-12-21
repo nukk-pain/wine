@@ -1,25 +1,25 @@
 // components/DataConfirmation.tsx
 import { useState } from 'react';
-import { WineInfo, ReceiptInfo } from '@/lib/gemini';
+import { WineInfo } from '@/types'; // Import from central types
 
 interface DataConfirmationProps {
   type: 'wine_label' | 'receipt';
-  data: WineInfo | ReceiptInfo;
+  data: WineInfo;
   loading: boolean;
   error: string;
   onConfirm: () => void;
   onCancel: () => void;
-  onEdit?: (editedData: WineInfo | ReceiptInfo) => void;
+  onEdit?: (editedData: WineInfo) => void;
 }
 
-const DataField = ({ 
-  label, 
-  value, 
+const DataField = ({
+  label,
+  value,
   onChange,
   type = 'text'
-}: { 
-  label: string; 
-  value: any; 
+}: {
+  label: string;
+  value: any;
   onChange?: (value: any) => void;
   type?: 'text' | 'number';
 }) => (
@@ -42,13 +42,13 @@ const DataField = ({
   </div>
 );
 
-const WineDataDisplay = ({ 
-  data, 
-  isEditing, 
-  onChange 
-}: { 
-  data: WineInfo; 
-  isEditing: boolean; 
+const WineDataDisplay = ({
+  data,
+  isEditing,
+  onChange
+}: {
+  data: WineInfo;
+  isEditing: boolean;
   onChange?: (field: string, value: any) => void;
 }) => (
   <div className="space-y-4">
@@ -115,95 +115,6 @@ const WineDataDisplay = ({
       value={data.notes}
       onChange={isEditing ? (value) => onChange?.('notes', value) : undefined}
     />
-  </div>
-);
-
-const ReceiptDataDisplay = ({ 
-  data, 
-  isEditing, 
-  onChange 
-}: { 
-  data: ReceiptInfo; 
-  isEditing: boolean; 
-  onChange?: (field: string, value: any) => void;
-}) => (
-  <div className="space-y-4">
-    <DataField
-      label="매장명"
-      value={data.store_name}
-      onChange={isEditing ? (value) => onChange?.('store_name', value) : undefined}
-    />
-    <DataField
-      label="구매일자"
-      value={data.purchase_date}
-      onChange={isEditing ? (value) => onChange?.('purchase_date', value) : undefined}
-    />
-    <DataField
-      label="총 금액"
-      value={data.total_amount}
-      type="number"
-      onChange={isEditing ? (value) => onChange?.('total_amount', value) : undefined}
-    />
-    <DataField
-      label="통화"
-      value={data.currency}
-      onChange={isEditing ? (value) => onChange?.('currency', value) : undefined}
-    />
-    
-    <div className="mt-4">
-      <h4 className="text-lg font-medium text-gray-900 mb-3">구매 항목</h4>
-      {data.items && data.items.length > 0 ? (
-        <div className="space-y-3">
-          {data.items.map((item, index) => (
-            <div key={index} className="p-3 bg-gray-50 rounded-md border">
-              <DataField
-                label="와인명"
-                value={item.wine_name}
-                onChange={isEditing ? (value) => {
-                  const newItems = [...data.items];
-                  newItems[index] = { ...item, wine_name: value };
-                  onChange?.('items', newItems);
-                } : undefined}
-              />
-              <div className="grid grid-cols-3 gap-2">
-                <DataField
-                  label="수량"
-                  value={item.quantity}
-                  type="number"
-                  onChange={isEditing ? (value) => {
-                    const newItems = [...data.items];
-                    newItems[index] = { ...item, quantity: value };
-                    onChange?.('items', newItems);
-                  } : undefined}
-                />
-                <DataField
-                  label="가격"
-                  value={item.price}
-                  type="number"
-                  onChange={isEditing ? (value) => {
-                    const newItems = [...data.items];
-                    newItems[index] = { ...item, price: value };
-                    onChange?.('items', newItems);
-                  } : undefined}
-                />
-                <DataField
-                  label="빈티지"
-                  value={item.vintage}
-                  type="number"
-                  onChange={isEditing ? (value) => {
-                    const newItems = [...data.items];
-                    newItems[index] = { ...item, vintage: value };
-                    onChange?.('items', newItems);
-                  } : undefined}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-gray-500">구매 항목이 없습니다.</p>
-      )}
-    </div>
   </div>
 );
 
@@ -274,11 +185,9 @@ export const DataConfirmation = ({
             onChange={handleFieldChange}
           />
         ) : (
-          <ReceiptDataDisplay
-            data={editedData as ReceiptInfo}
-            isEditing={isEditing}
-            onChange={handleFieldChange}
-          />
+          <div className="p-4 bg-gray-50 border-2 border-gray-200 rounded-xl text-lg text-center text-gray-500">
+            지원되지 않는 데이터 형식입니다.
+          </div>
         )}
       </div>
 

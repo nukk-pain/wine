@@ -1,5 +1,6 @@
 import { NotionWineProperties, validateWineData } from './notion-schema';
-import { WineInfo, ReceiptInfo, geminiService } from './gemini';
+import { WineInfo } from '@/types';
+import { geminiService } from './gemini';
 
 export interface ParsedWineData {
   notionData: NotionWineProperties;
@@ -31,7 +32,7 @@ export class NotionCompatibleParser {
   async parseWineLabelForNotion(imageBuffer: Buffer, mimeType: string, imageUrl?: string): Promise<ParsedWineData> {
     try {
       const wineInfo = await geminiService.extractWineInfo(imageBuffer, mimeType);
-      
+
       // Extract Notion-compatible fields
       const notionData: NotionWineProperties = {
         'Name': wineInfo.Name || '',
@@ -71,69 +72,27 @@ export class NotionCompatibleParser {
     }
   }
 
-  async parseReceiptForNotion(imageBuffer: Buffer, mimeType: string): Promise<ParsedReceiptData> {
-    try {
-      const receiptInfo = await geminiService.extractReceiptInfo(imageBuffer, mimeType);
-      
-      const wines: ParsedWineData[] = [];
-      
-      // Convert receipt items to Notion-compatible wine entries
-      for (const item of receiptInfo.items || []) {
-        const notionData: NotionWineProperties = {
-          'Name': item.wine_name || '',
-          'Vintage': item.vintage || null,
-          'Region/Producer': '', // Usually not available in receipts
-          'Price': item.price || null,
-          'Quantity': item.quantity || 1,
-          'Store': receiptInfo.store_name || '',
-          'Varietal(품종)': [], // Usually not detailed in receipts
-          'Image': null
-        };
-
-        const validation = validateWineData(notionData);
-
-        wines.push({
-          notionData,
-          additionalInfo: {},
-          validation
-        });
-      }
-
-      return {
-        wines,
-        receiptInfo: {
-          store: receiptInfo.store_name || '',
-          date: receiptInfo.purchase_date,
-          total_amount: receiptInfo.total_amount,
-          currency: receiptInfo.currency
-        }
-      };
-    } catch (error) {
-      console.error('Error parsing receipt:', error);
-      throw new Error(`Failed to parse receipt: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
+  /* parseReceiptForNotion removed for deprecation */
 
   async parseImageForNotion(
-    imageBuffer: Buffer, 
-    mimeType: string, 
+    imageBuffer: Buffer,
+    mimeType: string,
     imageUrl?: string
   ): Promise<{
     type: 'wine_label' | 'receipt' | 'unknown';
     data: ParsedWineData | ParsedReceiptData | null;
   }> {
     try {
-      // First classify the image
-      const imageType = await geminiService.classifyImage(imageBuffer, mimeType);
-      
+      // Deprecated: Classification is skipped, default to wine_label
+      const imageType = 'wine_label';
+
       let data: ParsedWineData | ParsedReceiptData | null = null;
-      
+
       if (imageType === 'wine_label') {
         data = await this.parseWineLabelForNotion(imageBuffer, mimeType, imageUrl);
-      } else if (imageType === 'receipt') {
-        data = await this.parseReceiptForNotion(imageBuffer, mimeType);
       }
-      
+      // Removed receipt handling
+
       return {
         type: imageType,
         data

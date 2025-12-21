@@ -1,8 +1,8 @@
 # Wine Tracker 리팩토링 - 남은 작업 계획 (Senior Guide)
 
 > 작성일: 2025-12-21  
-> 현재 상태: Phase 1 기반 작업 완료  
-> **최종 수정: 2025-12-21 (시니어 리뷰 반영 - 타입 정교화 및 실수 방지 가이드 추가)**
+> 현재 상태: Phase 1 (컴포넌트 분리) 완료  
+> **최종 수정: 2025-12-21 (Phase 1 완료)**
 
 ---
 
@@ -12,7 +12,15 @@
 |------|------|------|
 | 타입 시스템 통합 | `types/index.ts` | ✅ 완료 |
 | 유틸리티 추출 | `lib/utils/formatters.ts` | ✅ 완료 |
+| 2 | 페이지 로직 분리 | `pages/index.tsx`에서 비즈니스 로직을 Hook으로 추출 (`useImageUpload`, `useWineAnalysis` 등) | ✅ 완료 |
+| 3 | API 라우트 리팩토링 | `pages/api/*` 리팩토링 및 레거시 제거 | ✅ 완료 |
 | 기존 모듈 업데이트 | `notion-schema.ts`, `api-types.ts` | ✅ 완료 |
+| **컴포넌트 분리 (Phase 1)** | `WineBatchResultDisplay.tsx` 리팩토링 | ✅ 완료 |
+| - WineInfoCard | `components/WineInfoCard.tsx` | ✅ 완료 |
+| - WineEditForm | `components/WineEditForm.tsx` | ✅ 완료 |
+| - ManualWineForm | `components/ManualWineForm.tsx` | ✅ 완료 |
+| - useWineSelection | `hooks/useWineSelection.ts` | ✅ 완료 |
+| - notion-helpers | `lib/utils/notion-helpers.ts` | ✅ 완료 |
 
 ---
 
@@ -73,10 +81,10 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
 > - `formatKRW` 등은 `lib/utils/formatters.ts`에서 가져와 사용하세요.
 
 **완료 기준 (DoD)**:
-- [ ] `ImageProcessingItem` 타입을 활용하여 Props 구현
-- [ ] 기존 `renderWineInfo()` 로직과 동일한 UI 출력 (Tailwind 클래스 누락 주의)
-- [ ] 선택/편집/삭제 콜백 normal 작동 및 상태 전파 확인
-- [ ] 타입 체크 통과: `npm run type-check`
+- [x] `ImageProcessingItem` 타입을 활용하여 Props 구현
+- [x] 기존 `renderWineInfo()` 로직과 동일한 UI 출력 (Tailwind 클래스 누락 주의)
+- [x] 선택/편집/삭제 콜백 normal 작동 및 상태 전파 확인
+- [x] 타입 체크 통과: `npm run type-check`
 
 ---
 
@@ -309,7 +317,7 @@ interface UseNotionSaveReturn {
 
 ---
 
-### 3. API 라우트 리팩토링 (우선순위: 중간)
+### 3. API 라우트 리팩토링 (✅ 완료)
 
 #### 대상: [pages/api/process.ts](file:///c:/GitHub/wine/pages/api/process.ts)
 - **현재**: 426줄, 377줄짜리 단일 핸들러

@@ -1,24 +1,13 @@
 // pages/api/notion.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { saveWineToNotion, saveReceiptToNotion, updateWineRecord, WineData, ReceiptData, saveWineToNotionV2 } from '@/lib/notion';
-import { WineInfo, ReceiptInfo } from '@/lib/gemini';
+import { updateWineRecord, ReceiptData } from '@/lib/notion'; // Kept legacy ReceiptData for now if needed, or replace with types
+// import { ReceiptInfo } from '@/lib/gemini'; // Removed
 import { NotionWineProperties, validateWineData } from '@/lib/notion-schema';
-import { createApiHandler, sendSuccess, sendError, validateRequiredFields } from '@/lib/api-utils';
+import { createApiHandler, sendSuccess, sendError } from '@/lib/api-utils';
+import { saveWineToSheets, saveReceiptToSheets } from '@/lib/google-sheets';
 
-// Convert Gemini WineInfo to Notion WineData format
-function convertWineInfoToWineData(wineInfo: WineInfo): WineData {
-  return {
-    name: wineInfo.Name,
-    vintage: wineInfo.Vintage || undefined,
-    'Region/Producer': wineInfo['Region/Producer'] || undefined,
-    'Varietal(품종)': wineInfo['Varietal(품종)'] ? wineInfo['Varietal(품종)'].join(', ') : undefined,
-    // Default values - these will be set by the API
-    'Purchase date': undefined, // Will be set to current date
-    Status: undefined // Will be set to "재고"
-  };
-}
-
-// Convert Gemini ReceiptInfo to Notion ReceiptData format
+/*
+// Helper for Legacy Receipt Support (Cleanup target)
 function convertReceiptInfoToReceiptData(receiptInfo: ReceiptInfo): ReceiptData {
   return {
     store: receiptInfo.store_name,
@@ -32,6 +21,7 @@ function convertReceiptInfoToReceiptData(receiptInfo: ReceiptInfo): ReceiptData 
     total: receiptInfo.total_amount || 0
   };
 }
+*/
 
 export default createApiHandler({
   POST: async (req, res) => {
@@ -48,7 +38,7 @@ async function handleNotionRequest(
 ) {
 
   try {
-    const { action, data, source, pageId, status, imageUrl } = req.body;
+    const { action, data, pageId, status, imageUrl } = req.body;
 
     if (!action) {
       return sendError(res, 'Missing action', 400);
@@ -57,89 +47,25 @@ async function handleNotionRequest(
     let result;
 
     switch (action) {
-      case 'save_wine_v2':
-        // New API for NotionWineProperties
+      case 'save_wine':
+      case 'save_wine_v2': // Support both for backward compatibility during transition
         if (!data) {
           return sendError(res, 'Missing required wine data', 400);
         }
 
+        // We assume data is NotionWineProperties (Converted by Client)
+        // If data is legacy WineData or WineInfo, this might fail validation or have missing fields,
+        // but our refactored client ensures NotionWineProperties.
         const validation = validateWineData(data as NotionWineProperties);
         if (!validation.isValid) {
           return sendError(res, 'Invalid wine data', 400, validation.errors);
         }
 
-        // [MODIFIED] Switch to Google Sheets
-        // result = await saveWineToNotionV2(data as NotionWineProperties);
-        const { saveWineToSheets } = await import('@/lib/google-sheets');
         result = await saveWineToSheets(data as NotionWineProperties);
         break;
 
-      case 'save_wine':
-        if (!data) {
-          return sendError(res, 'Missing required data', 400);
-        }
-
-        // Convert Gemini format to Notion format if needed
-        let wineData: WineData;
-        if (data.Name || data['Region/Producer'] || data['Varietal(품종)']) {
-          // This looks like Gemini WineInfo format (new schema)
-          wineData = convertWineInfoToWineData(data as WineInfo);
-        } else {
-          // Already in WineData format or similar
-          wineData = data as WineData;
-        }
-
-        // Add current date as purchased_date and set status to "재고"
-        const enrichedWineData: WineData = {
-          ...wineData,
-          'Purchase date': new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-          Status: 'In Stock' // Normalize to English for Sheets
-        };
-
-        // Normalize for NotionWineProperties conversion inside saveWineToSheets
-        // We need to map Legacy WineData -> NotionWineProperties manually here if we want to reuse saveWineToSheets
-        // Or create an adapter. Let's do a quick adapter here.
-        const sheetsData: NotionWineProperties = {
-          'Name': enrichedWineData.name,
-          'Vintage': enrichedWineData.vintage || null,
-          'Region/Producer': enrichedWineData['Region/Producer'] || '',
-          'Price': enrichedWineData.price || null,
-          'Quantity': enrichedWineData.quantity || null,
-          'Store': enrichedWineData.Store || '',
-          'Varietal(품종)': enrichedWineData['Varietal(품종)'] ? (Array.isArray(enrichedWineData['Varietal(품종)']) ? enrichedWineData['Varietal(품종)'] : [enrichedWineData['Varietal(품종)'] as string]) : [],
-          'Image': null, // Legacy save often didn't pass image here? Checking...
-          'Status': 'In Stock',
-          'Purchase date': enrichedWineData['Purchase date']
-        };
-
-        const { saveWineToSheets: saveWineToSheetsLegacy } = await import('@/lib/google-sheets');
-        result = await saveWineToSheetsLegacy(sheetsData);
-        break;
-
-      case 'save_receipt':
-        if (!data) {
-          return sendError(res, 'Missing required data', 400);
-        }
-
-        // Convert Gemini format to Notion format if needed
-        let receiptData: ReceiptData;
-        if (data.store_name && data.items) {
-          // This looks like Gemini ReceiptInfo format
-          receiptData = convertReceiptInfoToReceiptData(data as ReceiptInfo);
-        } else {
-          // Already in ReceiptData format
-          receiptData = data as ReceiptData;
-        }
-
-        // Ensure current date is set
-        const enrichedReceiptData: ReceiptData = {
-          ...receiptData,
-          date: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
-        };
-
-        const { saveReceiptToSheets } = await import('@/lib/google-sheets');
-        result = await saveReceiptToSheets(enrichedReceiptData);
-        break;
+      // case 'save_receipt': deprecated
+      // break;
 
       case 'update_status':
         if (!pageId || !status) {
@@ -162,15 +88,11 @@ async function handleNotionRequest(
           },
           body: JSON.stringify({ urls: [imageUrl] })
         });
-
-        if (cleanupResponse.ok) {
-          console.log('✅ [NOTION] Blob cleanup successful for:', imageUrl);
-        } else {
+        if (!cleanupResponse.ok) {
           console.warn('⚠️ [NOTION] Blob cleanup failed:', cleanupResponse.statusText);
         }
       } catch (cleanupError) {
         console.warn('⚠️ [NOTION] Blob cleanup error:', cleanupError);
-        // Don't fail the main operation if cleanup fails
       }
     }
 

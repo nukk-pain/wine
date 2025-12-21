@@ -1,14 +1,12 @@
-// pages/index.tsx
 import { useState } from 'react';
 import Head from 'next/head';
 import { ImageUpload } from '@/components/ImageUpload';
-import { ImageTypeSelector, ImageType } from '@/components/ImageTypeSelector';
-import { WineResultDisplay } from '@/components/WineResultDisplay';
-import { DataConfirmation } from '@/components/DataConfirmation';
-import { ImagePreviewGrid, ImageProcessingItem } from '@/components/ImagePreviewGrid';
-import { ProcessingProgress } from '@/components/ProcessingProgress';
 import { WineBatchResultDisplay } from '@/components/WineBatchResultDisplay';
-import { NotionWineProperties } from '@/lib/notion-schema';
+import { ProcessingProgress } from '@/components/ProcessingProgress';
+import { ImageProcessingItem, NotionWineProperties } from '@/types';
+import { useImageUpload } from '@/hooks/useImageUpload';
+import { useWineAnalysis } from '@/hooks/useWineAnalysis';
+import { useNotionSave } from '@/hooks/useNotionSave';
 
 // Mobile-first layout components
 const MobileLayout = ({ children }: { children: React.ReactNode }) => (
@@ -17,827 +15,175 @@ const MobileLayout = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-// Mobile-optimized processing step wrapper
-const ProcessingStep = ({ title, children, className = "" }: { 
-  title: string; 
+// Mobile-optimized processing step wrapper - Wine Cellar glassmorphism
+const ProcessingStep = ({ title, children, className = "" }: {
+  title: string;
   children: React.ReactNode;
   className?: string;
 }) => (
-  <section className={`bg-white rounded-xl shadow-lg p-6 ${className}`}>
-    {title && <h2 className="text-xl font-bold mb-6 text-gray-800">{title}</h2>}
-    {children}
+  <section className={`relative group ${className}`}>
+    {/* Glassmorphism container */}
+    <div className="relative backdrop-blur-xl bg-wine-glass border border-wine-glassBorder rounded-2xl p-6 transition-all duration-500 hover:bg-wine-glassHover hover:border-wine-gold/30">
+      {/* Top decorative line */}
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-wine-gold/40 to-transparent" />
+
+      {title && (
+        <h2 className="font-playfair text-xl text-wine-cream font-normal mb-6">
+          {title}
+        </h2>
+      )}
+
+      {/* Content */}
+      <div className="relative z-10">
+        {children}
+      </div>
+
+      {/* Hover glow effect */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-gradient-radial from-wine-gold/5 to-transparent rounded-2xl" />
+    </div>
   </section>
 );
 
-// Mobile-optimized loading spinner
+// Mobile-optimized loading spinner - Wine Cellar theme
 const LoadingSpinner = ({ message }: { message: string }) => (
   <div className="text-center py-8">
-    <div className="text-lg font-medium text-gray-700 mb-4">{message}</div>
+    <div className="text-lg font-body font-medium text-wine-cream mb-4">{message}</div>
     <div className="flex justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div>
+      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-wine-gold"></div>
     </div>
   </div>
 );
 
-// Mobile-optimized error message
+// Mobile-optimized error message - Wine Cellar theme
 const ErrorMessage = ({ message }: { message: string }) => (
   <div className="text-center py-8">
-    <div className="text-lg font-medium text-red-600 bg-red-50 rounded-lg p-4 border border-red-200">
-      ⚠️ 오류: {message}
+    <div className="text-lg font-body font-medium text-wine-red bg-wine-red/10 rounded-xl p-4 border border-wine-red/40">
+      {message}
     </div>
   </div>
 );
 
-interface ProcessedData {
-  type: 'wine_label' | 'receipt';
-  extractedData: any;
-  notionResult?: any;
-  notionResults?: any[];
-  savedImagePath?: string;
-}
-
-interface ConfirmationData {
-  type: 'wine_label' | 'receipt';
-  extractedData: any;
-  savedImagePath?: string;
-}
-
 export default function MainPage() {
-  // Multiple images mode (only mode)
   const [processingItems, setProcessingItems] = useState<ImageProcessingItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string>('');
+
+  // Hooks
+  const { uploadFiles, isUploading, error: uploadError } = useImageUpload();
+  const { analyzeBatch, analyzeRetry, isAnalyzing, error: analysisError } = useWineAnalysis();
+  const { saveAll, saveSelected, saveIndividual, isSaving, saveProgress } = useNotionSave();
+
+  // Combined Loading/Error state for UI
+  const isLoading = isUploading || isAnalyzing || isSaving;
+  // Display analysis error or upload error.
+  const error = analysisError || uploadError;
 
   const handleImageUpload = async (files: File[]) => {
-    handleMultipleImageUpload(files);
-  };
+    const results = await uploadFiles(files);
 
-  const handleMultipleImageUpload = async (files: File[]) => {
-    setError('');
-    setLoading(true);
-    
-    try {
-      console.log(`📤 [CLIENT] Starting batch upload for ${files.length} files`);
-      
-      // Split files into batches of 5
-      const BATCH_SIZE = 5;
-      const batches: File[][] = [];
-      for (let i = 0; i < files.length; i += BATCH_SIZE) {
-        batches.push(files.slice(i, i + BATCH_SIZE));
-      }
-      
-      console.log(`📦 [CLIENT] Split into ${batches.length} batches`);
-      
-      // Initialize processing items for all files
-      const allItems: ImageProcessingItem[] = files.map((file, index) => ({
+    if (results.length > 0) {
+      const newItems: ImageProcessingItem[] = results.map((res, index) => ({
         id: `${Date.now()}-${index}`,
-        file,
-        url: URL.createObjectURL(file),
+        file: res.file,
+        preview: res.preview,
         status: 'uploaded',
-        uploadResult: null
+        progress: 0
       }));
-      
-      setProcessingItems(allItems);
-      
-      // Process each batch sequentially
-      const allResults: any[] = [];
-      
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        console.log(`📋 [CLIENT] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} files)`);
-        
-        try {
-          // Use individual uploads instead of batch upload API
-          const batchResults = await Promise.allSettled(
-            batch.map(async (file, fileIndex) => {
-              const formData = new FormData();
-              formData.append('file', file);
-              
-              const uploadResponse = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData,
-              });
-              
-              if (!uploadResponse.ok) {
-                throw new Error(`HTTP Error: ${uploadResponse.status} ${uploadResponse.statusText}`);
-              }
-              
-              const result = await uploadResponse.json();
-              console.log(`📦 [CLIENT] Upload API response:`, result);
-              if (!result.success) {
-                throw new Error(result.error || 'Upload failed');
-              }
-              
-              return result;
-            })
-          );
-          
-          // Convert Promise.allSettled results to upload results format
-          const uploadResults = batchResults.map((result, index) => {
-            console.log(`🔍 [CLIENT] Batch result ${index}:`, {
-              status: result.status,
-              hasValue: result.status === 'fulfilled' ? !!result.value : false,
-              valueKeys: result.status === 'fulfilled' ? Object.keys(result.value || {}) : [],
-              url: result.status === 'fulfilled' ? result.value?.url : undefined,
-              fileUrl: result.status === 'fulfilled' ? result.value?.fileUrl : undefined
-            });
-            if (result.status === 'fulfilled') {
-              return {
-                success: true,
-                url: result.value.data?.url || result.value.data?.fileUrl,  // data 객체에서 가져오기
-                fileUrl: result.value.data?.url || result.value.data?.fileUrl,
-                fileName: result.value.data?.fileName,
-                fileSize: result.value.data?.fileSize
-              };
-            } else {
-              return {
-                success: false,
-                error: result.reason?.message || 'Upload failed'
-              };
-            }
-          });
-          
-          // Create mock response to match expected format
-          const successCount = uploadResults.filter(r => r.success).length;
-          const uploadResult = {
-            success: true,
-            results: uploadResults,
-            successCount,
-            failedCount: uploadResults.length - successCount
-          };
-          
-          // Add results from this batch
-          allResults.push(...uploadResult.results);
-          
-          console.log(`✅ [CLIENT] Batch ${batchIndex + 1} completed: ${uploadResult.successCount}/${batch.length} successful`);
-          
-        } catch (batchError) {
-          console.error(`❌ [CLIENT] Batch ${batchIndex + 1} failed:`, batchError);
-          
-          // Add error results for this batch
-          batch.forEach(() => {
-            allResults.push({
-              success: false,
-              error: `Batch ${batchIndex + 1} failed: ${batchError instanceof Error ? batchError.message : 'Unknown error'}`
-            });
-          });
-        }
-      }
-      
-      // Update processing items with final results
-      const updatedItems: ImageProcessingItem[] = files.map((file, index) => {
-        const result = allResults[index];
-        console.log(`📊 [CLIENT] Processing item ${index}:`, {
-          hasResult: !!result,
-          resultSuccess: result?.success,
-          resultUrl: result?.url,
-          resultFileUrl: result?.fileUrl,
-          finalUrl: result?.success ? (result.url || result.fileUrl) : 'will use blob URL'
-        });
-        return {
-          id: `${Date.now()}-${index}`,
-          file,
-          url: result?.success ? (result.url || result.fileUrl) : URL.createObjectURL(file),
-          status: result?.success ? 'uploaded' : 'error',
-          error: result?.success ? undefined : result.error,
-          uploadResult: result
-        };
-      });
-      
-      setProcessingItems(updatedItems);
-      
-      const successCount = allResults.filter(r => r?.success).length;
-      console.log(`🎉 [CLIENT] All batches completed: ${successCount}/${files.length} files successful`);
-      
-    } catch (error) {
-      setError(`업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
-      console.error('Multiple upload error:', error);
-    } finally {
-      setLoading(false);
+      setProcessingItems(prev => [...prev, ...newItems]);
     }
   };
 
-  // Auto-process uploaded images
-  const handleBatchAnalyze = async (items: ImageProcessingItem[]) => {
-    if (items.length === 0) return;
-    
-    console.log(`🔄 [CLIENT] Processing ${items.length} uploaded images...`);
-    
-    // Update status to processing
-    setProcessingItems(prevItems => 
-      prevItems.map(item => 
-        items.find(i => i.id === item.id) 
-          ? { ...item, status: 'processing', progress: 0 }
-          : item
-      )
-    );
-    
-    try {
-      // Use process-multiple API
-      const response = await fetch('/api/process-multiple', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          images: items.map(item => ({
-            id: item.id,
-            url: item.url,
-            type: 'wine_label' // Default to wine_label, let Gemini auto-classify
-          })),
-          useGemini: 'true',
-          skipNotion: 'true' // Skip Notion for now, save manually later
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.success && result.results) {
-        console.log(`✅ [CLIENT] Processing completed: ${result.successCount}/${result.totalImages} successful`);
-        
-        // Update items with processing results
-        setProcessingItems(prevItems => 
-          prevItems.map(item => {
-            const processResult = result.results.find((r: any) => r.id === item.id);
-            if (processResult) {
-              return {
-                ...item,
-                status: processResult.success ? 'completed' : 'error',
-                result: processResult.success ? {
-                  extractedData: processResult.extractedData,
-                  type: processResult.type
-                } : undefined,
-                error: processResult.success ? undefined : processResult.error,
-                progress: processResult.success ? 100 : 0
-              };
-            }
-            return item;
-          })
-        );
-      } else {
-        throw new Error(result.error || 'Processing failed');
-      }
-      
-    } catch (error) {
-      console.error('❌ [CLIENT] Batch processing failed:', error);
-      
-      // Update items with error status
-      setProcessingItems(prevItems => 
-        prevItems.map(item => 
-          items.find(i => i.id === item.id) 
-            ? { ...item, status: 'error', error: error instanceof Error ? error.message : 'Processing failed' }
-            : item
-        )
-      );
-    }
-  };
-
-  // Retry analysis for a single item
-  const handleRetryAnalysis = async (itemId: string) => {
-    const item = processingItems.find(item => item.id === itemId);
-    if (!item) return;
-    
-    console.log(`🔄 [CLIENT] Retrying analysis for image ${itemId}...`);
-    
-    // Update status to processing
-    setProcessingItems(prevItems => 
-      prevItems.map(i => 
-        i.id === itemId 
-          ? { ...i, status: 'processing', progress: 0, error: undefined, result: undefined }
-          : i
-      )
-    );
-    
-    try {
-      // Use process-multiple API for single item retry
-      const response = await fetch('/api/process-multiple', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          images: [{
-            id: item.id,
-            url: item.url,
-            type: 'wine_label' // Default to wine_label, let Gemini auto-classify
-          }],
-          useGemini: 'true',
-          skipNotion: 'true' // Skip Notion for now, save manually later
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.success && result.results && result.results.length > 0) {
-        const apiResult = result.results[0];
-        
-        console.log(`✅ [CLIENT] Retry analysis completed for image ${itemId}`);
-        
-        // Update item with new results
-        setProcessingItems(prevItems => 
-          prevItems.map(i => 
-            i.id === itemId ? {
-              ...i,
-              status: apiResult.success ? 'completed' : 'error',
-              result: apiResult.success ? {
-                extractedData: apiResult.extractedData,
-                type: apiResult.type
-              } : undefined,
-              error: apiResult.success ? undefined : apiResult.error,
-              progress: apiResult.success ? 100 : 0
-            } : i
-          )
-        );
-        
-      } else {
-        throw new Error(result.error || 'Retry analysis failed');
-      }
-      
-    } catch (error) {
-      console.error('❌ [CLIENT] Retry analysis failed:', error);
-      
-      // Update item with error status
-      setProcessingItems(prevItems => 
-        prevItems.map(i => 
-          i.id === itemId 
-            ? { ...i, status: 'error', error: error instanceof Error ? error.message : 'Retry analysis failed' }
-            : i
-        )
-      );
-    }
-  };
-
-  const handleRemoveImage = (id: string) => {
-    setProcessingItems(items => {
-      const itemToRemove = items.find(item => item.id === id);
-      if (itemToRemove) {
-        // Clean up object URL
-        URL.revokeObjectURL(itemToRemove.url);
-      }
-      return items.filter(item => item.id !== id);
-    });
-  };
-
-  const handleRetryImage = async (id: string) => {
-    const item = processingItems.find(item => item.id === id);
-    if (!item) return;
-    
-    // Set item to processing
-    setProcessingItems(items => 
-      items.map(i => 
-        i.id === id 
-          ? { ...i, status: 'processing', error: undefined, progress: 0 }
-          : i
-      )
-    );
-    
-    try {
-      console.log(`🔄 [CLIENT] Retrying analysis for image ${id}`);
-      
-      // Use the process-multiple API for single retry
-      const response = await fetch('/api/process-multiple', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          images: [{
-            id: item.id,
-            url: item.url,
-            type: 'wine_label'
-          }],
-          useGemini: 'true',
-          skipNotion: 'true'
-        }),
-      });
-      
-      const result = await response.json();
-      
-      if (response.ok && result.success && result.results.length > 0) {
-        const apiResult = result.results[0];
-        
-        setProcessingItems(items => 
-          items.map(i => 
-            i.id === id ? {
-              ...i,
-              status: apiResult.success ? 'completed' : 'error',
-              result: apiResult.success ? { extractedData: apiResult.extractedData, type: apiResult.type } : undefined,
-              error: apiResult.success ? undefined : apiResult.error,
-              progress: apiResult.success ? 100 : 0
-            } : i
-          )
-        );
-        
-        console.log(`✅ [CLIENT] Retry successful for image ${id}`);
-        
-      } else {
-        throw new Error(result.error || 'Retry failed');
-      }
-      
-    } catch (error) {
-      console.error(`❌ [CLIENT] Retry failed for image ${id}:`, error);
-      
-      setProcessingItems(items => 
-        items.map(i => 
-          i.id === id 
-            ? { ...i, status: 'error', error: error instanceof Error ? error.message : 'Retry failed', progress: 0 }
-            : i
-        )
-      );
-    }
+  const onItemUpdate = (id: string, updates: Partial<ImageProcessingItem>) => {
+    setProcessingItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
   };
 
   const handleBatchAnalysis = async () => {
-    if (processingItems.length === 0) return;
-    
-    setLoading(true);
-    setError('');
-    
-    // Identify which items need processing BEFORE updating state
-    const itemsToProcess = processingItems.filter(item => 
-      item.status === 'uploaded' || item.status === 'error'
-    );
-    
-    if (itemsToProcess.length === 0) {
-      setLoading(false);
-      setError('처리할 수 있는 이미지가 없습니다.');
-      return;
-    }
-    
-    // Set all eligible items to processing
-    setProcessingItems(items => 
-      items.map(item => 
-        item.status === 'uploaded' || item.status === 'error'
-          ? { ...item, status: 'processing', progress: 0 }
-          : item
-      )
-    );
-    
-    try {
-      // Prepare images for batch processing using the identified items
-      const imagesToProcess = itemsToProcess.map(item => ({
-        id: item.id,
-        url: item.url,
-        type: 'wine_label' as const
-      }));
-      
-      console.log('🚀 [CLIENT] Starting batch analysis for', imagesToProcess.length, 'images');
-      console.log('📋 [CLIENT] Images to process:', imagesToProcess.map(img => ({
-        id: img.id,
-        url: img.url,
-        isBlob: img.url?.startsWith('blob:'),
-        isHttps: img.url?.startsWith('https:')
-      })));
-      
-      // Use individual process API calls instead of batch
-      console.log('🚀 [CLIENT] Starting individual analysis for', imagesToProcess.length, 'images');
-      
-      // Process each item individually using Promise.allSettled
-      const analysisResults = await Promise.allSettled(
-        imagesToProcess.map(async (item, index) => {
-          try {
-            // Update individual item progress
-            setProcessingItems(items => 
-              items.map(i => 
-                i.id === item.id 
-                  ? { ...i, status: 'processing', progress: 25 }
-                  : i
-              )
-            );
-            
-            const response = await fetch('/api/process', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                imageUrl: item.url,
-                type: 'wine_label',  // 기본값으로 wine_label 설정
-                useGemini: 'true',
-                skipNotion: 'true'
-              }),
-            });
-            
-            if (!response.ok) {
-              throw new Error(`HTTP Error: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            
-            if (!result.success) {
-              throw new Error(result.error || 'Analysis failed');
-            }
-            
-            return {
-              id: item.id,
-              success: true,
-              extractedData: result.data.extractedData,
-              type: result.data.type
-            };
-            
-          } catch (error) {
-            return {
-              id: item.id,
-              success: false,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            };
-          }
-        })
-      );
-      
-      // Update all items with their analysis results
-      setProcessingItems(items => 
-        items.map(item => {
-          const analysisResult = analysisResults.find((r, index) => {
-            if (r.status === 'fulfilled') {
-              return r.value.id === item.id;
-            } else if (r.status === 'rejected') {
-              return itemsToProcess[index]?.id === item.id;
-            }
-            return false;
-          });
-          
-          if (analysisResult) {
-            if (analysisResult.status === 'fulfilled') {
-              const result = analysisResult.value;
-              return {
-                ...item,
-                status: result.success ? 'completed' : 'error',
-                result: result.success ? { extractedData: result.extractedData, type: result.type } : undefined,
-                error: result.success ? undefined : result.error,
-                progress: result.success ? 100 : 0
-              };
-            } else {
-              return {
-                ...item,
-                status: 'error',
-                error: 'Analysis failed unexpectedly',
-                progress: 0
-              };
-            }
-          }
-          return item;
-        })
-      );
-      
-      const successCount = analysisResults.filter(r => 
-        r.status === 'fulfilled' && r.value.success
-      ).length;
-      
-      console.log(`✅ [CLIENT] Individual analysis completed: ${successCount}/${itemsToProcess.length} successful`);
-      
-    } catch (error) {
-      console.error('❌ [CLIENT] Individual analysis failed:', error);
-      setError(`분석 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
-      
-      // Reset processing items back to uploaded/error status
-      setProcessingItems(items => 
-        items.map(item => 
-          item.status === 'processing'
-            ? { ...item, status: 'error', error: 'Analysis processing failed', progress: 0 }
-            : item
-        )
-      );
-    } finally {
-      setLoading(false);
+    const targetItems = processingItems.filter(item => item.status === 'uploaded' || item.status === 'error');
+    if (targetItems.length > 0) {
+      await analyzeBatch(targetItems, onItemUpdate);
     }
   };
 
-
-
-  const handleSaveAll = async (completedItems: ImageProcessingItem[]) => {
-    if (completedItems.length === 0) return;
-
-    setSaving(true);
-    setError('');
-
-    try {
-      console.log('💾 [CLIENT] Starting batch save all for', completedItems.length, 'items');
-
-      // Prepare items for batch save
-      const itemsForSave = completedItems.map(item => ({
-        id: item.id,
-        type: 'wine_label' as const,
-        extractedData: item.result?.extractedData || {},
-        imageUrl: item.url // Include imageUrl for blob cleanup
-      }));
-
-      const response = await fetch('/api/batch-notion', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          operation: 'save_all',
-          items: itemsForSave
-        }),
-      });
-
-      const result = await response.json();
-
-      console.log('💾 [CLIENT] Batch save all response:', result);
-
-      if (response.ok && result.success) {
-        console.log(`✅ [CLIENT] Batch save completed: ${result.savedCount}/${result.totalItems} saved`);
-        
-        // Show success message
-        alert(`성공! ${result.savedCount}개 항목이 Notion에 저장되었습니다.`);
-        
-        if (result.failedCount > 0) {
-          alert(`⚠️ ${result.failedCount}개 항목 저장에 실패했습니다.`);
-        }
-      } else {
-        throw new Error(result.error || 'Batch save failed');
-      }
-
-    } catch (error) {
-      console.error('❌ [CLIENT] Batch save all failed:', error);
-      setError(`일괄 저장 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
-    } finally {
-      setSaving(false);
+  const handleRetryAnalysis = async (id: string) => {
+    const item = processingItems.find(i => i.id === id);
+    if (item) {
+      await analyzeRetry(item, onItemUpdate);
     }
   };
 
-  const handleSaveSelected = async (selectedItems: ImageProcessingItem[]) => {
-    if (selectedItems.length === 0) return;
-
-    setSaving(true);
-    setError('');
-
-    try {
-      console.log('💾 [CLIENT] Starting batch save selected for', selectedItems.length, 'items');
-
-      // Prepare items for batch save
-      const itemsForSave = processingItems
-        .filter(item => item.status === 'completed')
-        .map(item => ({
-          id: item.id,
-          type: 'wine_label' as const,
-          extractedData: item.result?.extractedData || {},
-          imageUrl: item.url // Include imageUrl for blob cleanup
-        }));
-
-      const selectedIds = selectedItems.map(item => item.id);
-
-      const response = await fetch('/api/batch-notion', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          operation: 'save_selected',
-          items: itemsForSave,
-          selectedIds
-        }),
-      });
-
-      const result = await response.json();
-
-      console.log('💾 [CLIENT] Batch save selected response:', result);
-
-      if (response.ok && result.success) {
-        console.log(`✅ [CLIENT] Batch save selected completed: ${result.savedCount}/${result.totalItems} saved`);
-        
-        // Show success message
-        alert(`성공! 선택한 ${result.savedCount}개 항목이 Notion에 저장되었습니다.`);
-        
-        if (result.failedCount > 0) {
-          alert(`⚠️ ${result.failedCount}개 항목 저장에 실패했습니다.`);
-        }
-      } else {
-        throw new Error(result.error || 'Batch save selected failed');
-      }
-
-    } catch (error) {
-      console.error('❌ [CLIENT] Batch save selected failed:', error);
-      setError(`선택 저장 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
-    } finally {
-      setSaving(false);
-    }
+  const handleSaveAll = async (items: any[]) => {
+    // We ignore passed items and save all completed from state to ensure consistency, 
+    // or we can use the filtered list if needed. 
+    // Using processingItems is safer for global state sync.
+    await saveAll(processingItems, onItemUpdate);
   };
 
-  const handleSaveIndividual = async (itemId: string, wineData: NotionWineProperties): Promise<boolean> => {
-    try {
-      console.log('💾 [CLIENT] Starting individual save for item:', itemId);
-      console.log('   Wine data:', wineData);
-
-      const response = await fetch('/api/notion', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'save_wine',
-          data: wineData,
-          source: 'wine_label'
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        console.log('✅ [CLIENT] Individual save successful for item:', itemId);
-        alert('✅ 와인이 성공적으로 Notion에 저장되었습니다!');
-        return true;
-      } else {
-        console.error('❌ [CLIENT] Individual save failed:', result.error);
-        alert(`❌ 저장 실패: ${result.error || '알 수 없는 오류'}`);
-        return false;
-      }
-    } catch (error) {
-      console.error('❌ [CLIENT] Individual save error:', error);
-      alert(`❌ 저장 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
-      return false;
-    }
+  const handleSaveSelected = async (items: any[]) => {
+    const ids = items.map((i: any) => i.id);
+    await saveSelected(processingItems, ids, onItemUpdate);
   };
 
-  const handleAddManual = async (wineData: NotionWineProperties): Promise<boolean> => {
-    try {
-      console.log('➕ [CLIENT] Starting manual wine save');
-      console.log('   Wine data:', wineData);
-
-      const response = await fetch('/api/notion', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'save_wine',
-          data: wineData,
-          source: 'manual_entry'
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        console.log('✅ [CLIENT] Manual wine save successful');
-        alert('✅ 수동 추가 와인이 성공적으로 Notion에 저장되었습니다!');
-        return true;
-      } else {
-        console.error('❌ [CLIENT] Manual wine save failed:', result.error);
-        alert(`❌ 저장 실패: ${result.error || '알 수 없는 오류'}`);
-        return false;
-      }
-    } catch (error) {
-      console.error('❌ [CLIENT] Manual wine save error:', error);
-      alert(`❌ 저장 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
-      return false;
-    }
+  const handleSaveIndividual = async (id: string, data: NotionWineProperties) => {
+    return await saveIndividual(id, data);
   };
 
-  const handleDelete = (itemId: string) => {
-    console.log('🗑️ [CLIENT] Deleting wine result:', itemId);
-    
-    // Remove from processing items
-    setProcessingItems((prev: ImageProcessingItem[]) => {
-      const itemToRemove = prev.find(item => item.id === itemId);
-      if (itemToRemove && itemToRemove.url.startsWith('blob:')) {
-        // Clean up blob URL
-        URL.revokeObjectURL(itemToRemove.url);
-      }
-      return prev.filter(item => item.id !== itemId);
-    });
-    
-    alert('🗑️ 와인 결과가 삭제되었습니다.');
+  const handleAddManual = async (data: NotionWineProperties) => {
+    // Empty ID signals manual entry in our updated useNotionSave logic
+    return await saveIndividual('', data);
+  };
+
+  const handleDelete = (id: string) => {
+    setProcessingItems(prev => prev.filter(i => i.id !== id));
   };
 
   return (
     <>
       <Head>
-        <title>Wine Tracker</title>
-        <meta name="description" content="모바일에서 와인 라벨을 촬영하여 와인 정보를 자동으로 기록하세요" />
+        <title>Wine Cellar</title>
+        <meta name="description" content="Track your personal wine collection with AI-powered label recognition" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-        <meta name="theme-color" content="#3B82F6" />
+        <meta name="theme-color" content="#1a0a0a" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      
-      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="container mx-auto px-4 py-6 max-w-md">
+
+      <main className="min-h-screen bg-wine-dark relative overflow-hidden">
+        {/* Main gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-b from-wine-dark via-wine-deep to-wine-midnight" />
+
+        {/* Noise texture for cellar atmosphere */}
+        <div
+          className="absolute inset-0 opacity-[0.03] pointer-events-none"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' /%3E%3C/svg%3E")`,
+            backgroundRepeat: 'repeat',
+          }}
+        />
+
+        {/* Top glow effect (wine cellar lighting) */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-80 bg-wine-gold/10 rounded-full blur-[120px] pointer-events-none" />
+
+        {/* Content layer */}
+        <div className="relative z-10 container mx-auto px-4 py-6 max-w-md">
           {/* Mobile-first header */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">🍷 Wine tracker</h1>
-            <p className="text-gray-600">라벨을 촬영해서 와인 정보를 기록하세요</p>
-          </div>
+          <header className="text-center mb-10 pt-6">
+            <div className="mb-3">
+              <h1 className="font-playfair text-[32px] font-light text-wine-gold tracking-wide leading-tight">
+                Wine Cellar
+              </h1>
+              <div className="w-16 h-[1px] bg-gradient-to-r from-transparent via-wine-gold/50 to-transparent mx-auto mt-2" />
+            </div>
+            <p className="font-body text-[13px] text-wine-creamDim tracking-[0.1em] uppercase">
+              Personal Collection
+            </p>
+          </header>
 
           {/* Mobile-first single column layout */}
           <MobileLayout>
-            <ProcessingStep title="📷 이미지 업로드" className="border-l-4 border-l-blue-500">
+            <ProcessingStep title="Upload Images">
               <div data-testid="upload-area">
-                <ImageUpload 
-                  onUpload={handleImageUpload} 
+                <ImageUpload
+                  onUpload={handleImageUpload}
                   multiple={true}
                 />
               </div>
@@ -847,23 +193,23 @@ export default function MainPage() {
             {processingItems.length > 0 && (
               <>
 
-                <ProcessingStep title="📊 분석 진행상황" className="border-l-4 border-l-yellow-500">
+                <ProcessingStep title="Analysis Progress">
                   <ProcessingProgress items={processingItems} />
                 </ProcessingStep>
 
                 {processingItems.some(item => item.status === 'uploaded' || item.status === 'error') && (
-                  <ProcessingStep title="🚀 일괄 분석" className="border-l-4 border-l-orange-500">
+                  <ProcessingStep title="Batch Analysis">
                     <div className="text-center">
-                      <p className="text-gray-600 mb-6">
-                        선택된 {processingItems.filter(item => item.status === 'uploaded' || item.status === 'error').length}개 
-                        이미지를 AI가 분석하여 와인 정보를 추출합니다.
+                      <p className="text-wine-creamDim font-body mb-6">
+                        AI will analyze {processingItems.filter(item => item.status === 'uploaded' || item.status === 'error').length} selected images
+                        to extract wine information.
                       </p>
                       <button
                         onClick={handleBatchAnalysis}
-                        disabled={loading}
-                        className="w-full py-4 px-6 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-bold rounded-xl shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transform active:scale-95"
+                        disabled={isLoading}
+                        className="w-full py-4 px-6 min-h-[56px] bg-gradient-to-r from-wine-gold to-wine-goldDark text-wine-dark text-lg font-body font-semibold rounded-xl shadow-wine hover:shadow-wine-lg hover:from-wine-goldDark hover:to-wine-gold transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
                       >
-                        {loading ? '🔄 분석 중...' : '🚀 모든 이미지 분석하기'}
+                        {isLoading ? 'Analyzing...' : 'Analyze All Images'}
                       </button>
                     </div>
                   </ProcessingStep>
@@ -871,7 +217,7 @@ export default function MainPage() {
 
                 {/* Batch Results Display - show when analysis is complete */}
                 {processingItems.some(item => item.status === 'completed') && (
-                  <ProcessingStep title="📊 분석 결과" className="border-l-4 border-l-purple-500">
+                  <ProcessingStep title="Analysis Results">
                     <WineBatchResultDisplay
                       items={processingItems}
                       onSaveAll={handleSaveAll}
@@ -880,7 +226,7 @@ export default function MainPage() {
                       onAddManual={handleAddManual}
                       onRetryAnalysis={handleRetryAnalysis}
                       onDelete={handleDelete}
-                      loading={saving}
+                      loading={isSaving}
                     />
                   </ProcessingStep>
                 )}
@@ -888,13 +234,11 @@ export default function MainPage() {
             )}
 
             {error && (
-              <ProcessingStep title="" className="border-l-4 border-l-red-500">
+              <ProcessingStep title="">
                 <ErrorMessage message={error} />
               </ProcessingStep>
             )}
           </MobileLayout>
-
-         
         </div>
       </main>
     </>

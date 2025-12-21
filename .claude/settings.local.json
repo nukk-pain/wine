@@ -51,7 +51,9 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git merge:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Skill(frontend-design)",
+      "Skill(frontend-design:*)"
     ],
     "deny": []
   }

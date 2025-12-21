@@ -1,38 +1,25 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-
-/**
- * Standard API response format
- */
-export interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
-/**
- * Standard error response format
- */
-export interface ApiError {
-  error: string;
-  details?: any;
-}
+import { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 /**
  * Send a success response
  */
 export function sendSuccess<T>(res: NextApiResponse, data: T, statusCode = 200): void {
-  res.status(statusCode).json({
+  const response: ApiSuccessResponse<T> = {
     success: true,
     data
-  });
+  };
+  res.status(statusCode).json(response);
 }
 
 /**
  * Send an error response
  */
 export function sendError(res: NextApiResponse, error: string, statusCode = 400, details?: any): void {
-  const response: ApiError = { error };
+  const response: ApiErrorResponse = {
+    success: false,
+    error
+  };
   if (details) {
     response.details = details;
   }
@@ -63,7 +50,7 @@ export function validateRequiredFields(
   res: NextApiResponse
 ): boolean {
   const missingFields = requiredFields.filter(field => !body[field]);
-  
+
   if (missingFields.length > 0) {
     sendError(
       res,
@@ -72,7 +59,7 @@ export function validateRequiredFields(
     );
     return false;
   }
-  
+
   return true;
 }
 
@@ -87,7 +74,7 @@ export function withErrorHandler(
       await handler(req, res);
     } catch (error) {
       console.error('API Error:', error);
-      
+
       if (error instanceof Error) {
         sendError(res, error.message, 500);
       } else {
@@ -112,13 +99,13 @@ export function createApiHandler(
   return withErrorHandler(async (req: NextApiRequest, res: NextApiResponse) => {
     const method = req.method as keyof typeof handlers;
     const handler = handlers[method];
-    
+
     if (!handler) {
       const allowedMethods = Object.keys(handlers);
       sendError(res, 'Method not allowed', 405, { allowedMethods });
       return;
     }
-    
+
     await handler(req, res);
   });
 }
@@ -142,10 +129,10 @@ export function parseJsonBody<T>(body: any): T | null {
  */
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 Bytes';
-  
+
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
+
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }

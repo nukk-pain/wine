@@ -1,0 +1,90 @@
+
+> wine-tracker@1.0.7 test
+> jest __tests__/integration/process-image.test.ts
+
+  console.log
+    [dotenv@17.2.0] injecting env (1) from .env.local (tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild)
+
+      at _log (node_modules/dotenv/lib/main.js:136:11)
+
+  console.log
+    [dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  write to custom object with { processEnv: myObject })
+
+      at _log (node_modules/dotenv/lib/main.js:136:11)
+
+FAIL __tests__/integration/process-image.test.ts (20.482 s)
+  Process Image API with Blob URLs
+    × should process image from Vercel Blob URL (5005 ms)
+    × should handle both file upload and URL processing (5008 ms)
+    × should validate image URL format (5008 ms)
+    × should handle missing imageUrl when no file provided (5004 ms)
+
+  ● Process Image API with Blob URLs › should process image from Vercel Blob URL
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+    [0m [90m 27 |[39m   })[33m;[39m
+     [90m 28 |[39m
+    [31m[1m>[22m[39m[90m 29 |[39m   it([32m'should process image from Vercel Blob URL'[39m[33m,[39m [36masync[39m () [33m=>[39m {
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 30 |[39m     [36mconst[39m handler [33m=[39m [36mawait[39m [36mimport[39m([32m'../../pages/api/process'[39m)[33m;[39m
+     [90m 31 |[39m
+     [90m 32 |[39m     [36mconst[39m mockBlobUrl [33m=[39m [32m'https://test.blob.vercel-storage.com/wine_123456.jpg'[39m[33m;[39m[0m
+
+      at it (__tests__/integration/process-image.test.ts:29:3)
+      at Object.describe (__tests__/integration/process-image.test.ts:3:1)
+
+  ● Process Image API with Blob URLs › should handle both file upload and URL processing
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+    [0m [90m 67 |[39m   })[33m;[39m
+     [90m 68 |[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   it([32m'should handle both file upload and URL processing'[39m[33m,[39m [36masync[39m () [33m=>[39m {
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     [36mconst[39m handler [33m=[39m [36mawait[39m [36mimport[39m([32m'../../pages/api/process'[39m)[33m;[39m
+     [90m 71 |[39m
+     [90m 72 |[39m     [36mconst[39m mockBlobUrl [33m=[39m [32m'https://test.blob.vercel-storage.com/wine_123456.jpg'[39m[33m;[39m[0m
+
+      at it (__tests__/integration/process-image.test.ts:69:3)
+      at Object.describe (__tests__/integration/process-image.test.ts:3:1)
+
+  ● Process Image API with Blob URLs › should validate image URL format
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+    [0m [90m  96 |[39m   })[33m;[39m
+     [90m  97 |[39m
+    [31m[1m>[22m[39m[90m  98 |[39m   it([32m'should validate image URL format'[39m[33m,[39m [36masync[39m () [33m=>[39m {
+     [90m     |[39m   [31m[1m^[22m[39m
+     [90m  99 |[39m     [36mconst[39m handler [33m=[39m [36mawait[39m [36mimport[39m([32m'../../pages/api/process'[39m)[33m;[39m
+     [90m 100 |[39m
+     [90m 101 |[39m     [36mconst[39m { req[33m,[39m res } [33m=[39m createMocks({[0m
+
+      at it (__tests__/integration/process-image.test.ts:98:3)
+      at Object.describe (__tests__/integration/process-image.test.ts:3:1)
+
+  ● Process Image API with Blob URLs › should handle missing imageUrl when no file provided
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+    [0m [90m 117 |[39m   })[33m;[39m
+     [90m 118 |[39m
+    [31m[1m>[22m[39m[90m 119 |[39m   it([32m'should handle missing imageUrl when no file provided'[39m[33m,[39m [36masync[39m () [33m=>[39m {
+     [90m     |[39m   [31m[1m^[22m[39m
+     [90m 120 |[39m     [36mconst[39m handler [33m=[39m [36mawait[39m [36mimport[39m([32m'../../pages/api/process'[39m)[33m;[39m
+     [90m 121 |[39m
+     [90m 122 |[39m     [36mconst[39m { req[33m,[39m res } [33m=[39m createMocks({[0m
+
+      at it (__tests__/integration/process-image.test.ts:119:3)
+      at Object.describe (__tests__/integration/process-image.test.ts:3:1)
+
+Test Suites: 1 failed, 1 total
+Tests:       4 failed, 4 total
+Snapshots:   0 total
+Time:        21.116 s
+Ran all test suites matching /__tests__\\integration\\process-image.test.ts/i.

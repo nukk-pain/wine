@@ -61,7 +61,7 @@ async function processSingleImage(
   useGemini: boolean
 ): Promise<ImageProcessResult> {
   const startTime = new Date().toISOString();
-  
+
   try {
     if (process.env.NODE_ENV === 'development') {
       console.log(`🔄 [MULTI-API] Processing image ${imageRequest.id}: ${imageRequest.url}`);
@@ -69,7 +69,7 @@ async function processSingleImage(
 
     let imageBuffer: Buffer;
     let mimeType: string;
-    
+
     // Handle different URL types based on environment
     if (imageRequest.url.startsWith('https://') || imageRequest.url.startsWith('http://')) {
       // Absolute URL (Vercel Blob or external) - fetch via HTTP
@@ -77,30 +77,30 @@ async function processSingleImage(
       if (!response.ok) {
         throw new Error(`Failed to fetch image from URL: ${response.statusText}`);
       }
-      
+
       const arrayBuffer = await response.arrayBuffer();
       imageBuffer = Buffer.from(arrayBuffer);
       mimeType = response.headers.get('content-type') || 'image/jpeg';
-      
+
     } else if (imageRequest.url.startsWith('/uploads/')) {
       // Local development - relative path, read directly from filesystem
       const fs = require('fs').promises;
       const path = require('path');
-      
+
       const filePath = path.join(process.cwd(), 'public', imageRequest.url);
-      
+
       try {
         imageBuffer = await fs.readFile(filePath);
-        
+
         // Determine MIME type from file extension
         const ext = path.extname(imageRequest.url).toLowerCase();
-        mimeType = ext === '.png' ? 'image/png' : 
-                  ext === '.webp' ? 'image/webp' : 'image/jpeg';
-                  
+        mimeType = ext === '.png' ? 'image/png' :
+          ext === '.webp' ? 'image/webp' : 'image/jpeg';
+
       } catch (fsError) {
         throw new Error(`Failed to read local file: ${imageRequest.url}`);
       }
-      
+
     } else {
       throw new Error(`Unsupported URL format: ${imageRequest.url}`);
     }
@@ -111,23 +111,18 @@ async function processSingleImage(
     if (useGemini) {
       // Use Gemini API for processing
       if (imageType === 'auto') {
-        // Auto-detect image type
-        const classifiedType = await geminiService.classifyImage(imageBuffer, mimeType);
-        
-        if (classifiedType === 'unknown') {
-          throw new Error('Could not determine image type');
-        }
-        
-        imageType = classifiedType as 'wine_label' | 'receipt';
+        // Deprecated: Classification is skipped, default to wine_label
+        imageType = 'wine_label';
       }
 
       // Extract information based on type
       if (imageType === 'wine_label') {
         extractedData = await geminiService.extractWineInfo(imageBuffer, mimeType);
-      } else if (imageType === 'receipt') {
-        extractedData = await geminiService.extractReceiptInfo(imageBuffer, mimeType);
+      } else {
+        // Fallback for deprecated 'receipt' type if it gets passed
+        console.warn('Receipt processing is deprecated. Skipping.');
+        extractedData = null;
       }
-      
     } else {
       // Use existing OCR-based processing
       const visionResult = await processWineImage(imageRequest.url);
@@ -135,10 +130,10 @@ async function processSingleImage(
       imageType = visionResult.imageType as 'wine_label' | 'receipt';
     }
 
-    console.log('Image processing completed:', { 
+    console.log('Image processing completed:', {
       id: imageRequest.id,
       type: imageType,
-      hasData: !!extractedData 
+      hasData: !!extractedData
     });
 
     return {
@@ -151,8 +146,8 @@ async function processSingleImage(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
-    console.error('Image processing error:', { 
+
+    console.error('Image processing error:', {
       id: imageRequest.id,
       url: imageRequest.url,
       error: errorMessage
@@ -174,19 +169,19 @@ async function processImagesBatch(
   maxConcurrent: number = MAX_CONCURRENT_PROCESSES
 ): Promise<ImageProcessResult[]> {
   const results: ImageProcessResult[] = [];
-  
+
   // Process in batches to avoid overwhelming the API
   for (let i = 0; i < images.length; i += maxConcurrent) {
     const batch = images.slice(i, i + maxConcurrent);
-    
+
     if (process.env.NODE_ENV === 'development') {
       console.log(`🚀 [MULTI-API] Processing batch ${Math.floor(i / maxConcurrent) + 1}: ${batch.length} images`);
     }
-    
+
     // Process batch concurrently
     const batchPromises = batch.map(img => processSingleImage(img, useGemini));
     const batchResults = await Promise.allSettled(batchPromises);
-    
+
     // Extract results (Promise.allSettled ensures all complete)
     for (const result of batchResults) {
       if (result.status === 'fulfilled') {
@@ -205,7 +200,7 @@ async function processImagesBatch(
       }
     }
   }
-  
+
   return results;
 }
 
@@ -232,7 +227,7 @@ export default async function handler(
 
   try {
     const requestBody: RequestBody = req.body;
-    
+
     // Validate request
     if (!requestBody.images || !Array.isArray(requestBody.images)) {
       return res.status(400).json({
@@ -311,7 +306,7 @@ export default async function handler(
 
     // Combine validation failures with processing results
     const allResults = [...validationResults, ...processingResults];
-    
+
     // Calculate summary statistics
     const successCount = allResults.filter(r => r.success).length;
     const errorCount = allResults.filter(r => !r.success).length;
@@ -339,11 +334,11 @@ export default async function handler(
     });
 
   } catch (error) {
-    console.error('Multiple process API error:', { 
+    console.error('Multiple process API error:', {
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
     });
-    
+
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
