@@ -72,6 +72,8 @@ playwright.config.ts
 public/wine-photos/
 public/uploads/
 vision.json
+test-uploads/
+test-results/
 
 # Deployment scripts (if not needed in production)
 deployment/
