@@ -80,7 +80,11 @@ export function useWineAnalysis(): UseWineAnalysisReturn {
             // `handleBatchAnalyze` uses `for ... of` with `await`. So SEQUENTIAL.
             // Sequential is safer for rate limits.
 
-            const pendingItems = items.filter(item => item.status === 'pending' || item.status === 'error');
+            const pendingItems = items.filter(item =>
+                item.status === 'pending' ||
+                item.status === 'uploaded' ||
+                item.status === 'error'
+            );
 
             for (const item of pendingItems) {
                 await analyzeItem(item, onItemComplete);
