@@ -1,10 +1,10 @@
 // pages/api/notion.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { updateWineRecord, ReceiptData } from '@/lib/notion'; // Kept legacy ReceiptData for now if needed, or replace with types
+import { updateWineRecord } from '@/lib/notion'; // Kept legacy ReceiptData for now if needed, or replace with types
 // import { ReceiptInfo } from '@/lib/gemini'; // Removed
-import { NotionWineProperties, validateWineData } from '@/lib/utils/notion-helpers';
+import { NotionWineProperties, validateWineData } from '@/lib/utils/wine-data-helpers';
 import { createApiHandler, sendSuccess, sendError } from '@/lib/api-utils';
-import { saveWineToSheets, saveReceiptToSheets } from '@/lib/google-sheets';
+import { saveWineToSheets } from '@/lib/google-sheets';
 
 /*
 // Helper for Legacy Receipt Support (Cleanup target)

@@ -1,6 +1,6 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { WineInfo } from '@/types';
-import { normalizeWineInfo, validateWineData } from './utils/notion-helpers';
+import { normalizeWineInfo } from './utils/wine-data-helpers';
 
 const genai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY || '',

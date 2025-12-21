@@ -4,7 +4,7 @@ import formidable from 'formidable';
 import fs from 'fs/promises';
 import path from 'path';
 import { geminiService } from '@/lib/gemini';
-import { normalizeWineInfo } from '@/lib/utils/notion-helpers';
+import { normalizeWineInfo } from '@/lib/utils/wine-data-helpers';
 import { createFormidableConfig } from '@/lib/formidable-config';
 import { sendSuccess, sendError } from '@/lib/api-utils';
 

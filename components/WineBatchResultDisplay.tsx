@@ -5,7 +5,7 @@ import { WineEditForm } from './WineEditForm';
 import { ManualWineForm } from './ManualWineForm';
 import { useWineSelection } from '@/hooks/useWineSelection';
 
-import { convertToNotionFormat } from '@/lib/utils/notion-helpers';
+import { convertToNotionFormat } from '@/lib/utils/wine-data-helpers';
 
 interface BatchResultDisplayProps {
   items: ImageProcessingItem[];

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ImageProcessingItem, NotionWineProperties, NotionSaveResult } from '@/types';
-import { convertToNotionFormat } from '@/lib/utils/notion-helpers';
+import { convertToNotionFormat } from '@/lib/utils/wine-data-helpers';
 
 interface UseNotionSaveReturn {
     isSaving: boolean;
@@ -29,7 +29,7 @@ export function useNotionSave(): UseNotionSaveReturn {
     const [saveProgress, setSaveProgress] = useState({ current: 0, total: 0 });
 
     const saveItemToNotion = async (item: ImageProcessingItem, dataToSave: NotionWineProperties): Promise<NotionSaveResult> => {
-        const response = await fetch('/api/notion', {
+        const response = await fetch('/api/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -154,7 +154,7 @@ export function useNotionSave(): UseNotionSaveReturn {
             // I should refactor saveItemToNotion to not need item, or create a simpler fetcher.
             // Or just inline fetch here.
 
-            const response = await fetch('/api/notion', {
+            const response = await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

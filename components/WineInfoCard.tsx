@@ -2,7 +2,7 @@ import React from 'react';
 import { ImageProcessingItem } from '@/types';
 import { DebugInfo } from './DebugInfo';
 import { formatKRW } from '@/lib/utils/formatters';
-import { convertToNotionFormat } from '@/lib/utils/notion-helpers';
+import { normalizeWineInfo, convertToNotionFormat } from '@/lib/utils/wine-data-helpers';
 
 interface WineInfoCardProps {
     item: ImageProcessingItem;

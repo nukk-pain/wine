@@ -14,6 +14,6 @@ export const API_ENDPOINTS = {
   UPLOAD_MULTIPLE: '/api/upload-multiple',
   PROCESS: '/api/process',
   PROCESS_MULTIPLE: '/api/process-multiple',
-  NOTION: '/api/notion',
+  NOTION: '/api/save',
   NOTION_BATCH: '/api/notion-batch',
 } as const;

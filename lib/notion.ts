@@ -1,6 +1,6 @@
 // lib/notion.ts
 import { Client } from '@notionhq/client';
-import { NotionWineProperties, mapToNotionProperties, validateWineData } from './utils/notion-helpers';
+import { NotionWineProperties, mapToNotionProperties, validateWineData } from './utils/wine-data-helpers';
 
 // Use the 2025-09-03 API version to enable data sources
 const notion = new Client({

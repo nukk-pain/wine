@@ -1,6 +1,6 @@
 // __tests__/integration/notion-api.test.ts
 import { createMocks } from 'node-mocks-http';
-import handler from '@/pages/api/notion';
+import handler from '@/pages/api/save';
 
 // Mock the notion lib functions
 jest.mock('@/lib/notion', () => ({
@@ -24,10 +24,11 @@ jest.mock('@/lib/notion', () => ({
   })
 }));
 
-describe('/api/notion', () => {
+describe('/api/save', () => {
   it('should save wine label data to Notion', async () => {
     const { req, res } = createMocks({
       method: 'POST',
+      url: '/api/save',
       body: {
         action: 'save_wine',
         data: {
@@ -44,7 +45,7 @@ describe('/api/notion', () => {
 
     expect(res._getStatusCode()).toBe(200);
     const response = JSON.parse(res._getData());
-    
+
     expect(response).toEqual({
       success: true,
       result: {
@@ -75,7 +76,7 @@ describe('/api/notion', () => {
 
     expect(res._getStatusCode()).toBe(200);
     const response = JSON.parse(res._getData());
-    
+
     expect(response).toEqual({
       success: true,
       result: [
@@ -105,7 +106,7 @@ describe('/api/notion', () => {
 
     expect(res._getStatusCode()).toBe(200);
     const response = JSON.parse(res._getData());
-    
+
     expect(response).toEqual({
       success: true,
       result: {
@@ -127,7 +128,7 @@ describe('/api/notion', () => {
 
     expect(res._getStatusCode()).toBe(400);
     const response = JSON.parse(res._getData());
-    
+
     expect(response).toEqual({
       success: false,
       error: 'Invalid action'
@@ -143,7 +144,7 @@ describe('/api/notion', () => {
 
     expect(res._getStatusCode()).toBe(405);
     const response = JSON.parse(res._getData());
-    
+
     expect(response).toEqual({
       success: false,
       error: 'Method not allowed'
@@ -163,7 +164,7 @@ describe('/api/notion', () => {
 
     expect(res._getStatusCode()).toBe(400);
     const response = JSON.parse(res._getData());
-    
+
     expect(response).toEqual({
       success: false,
       error: 'Missing required data'
@@ -190,7 +191,7 @@ describe('/api/notion', () => {
 
     expect(res._getStatusCode()).toBe(500);
     const response = JSON.parse(res._getData());
-    
+
     expect(response).toEqual({
       success: false,
       error: 'Notion operation failed',

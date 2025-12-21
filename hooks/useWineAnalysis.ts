@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ImageProcessingItem, ProcessResponse, ApiSuccessResponse, ApiErrorResponse } from '@/types';
-import { convertToNotionFormat } from '@/lib/utils/notion-helpers';
+import { normalizeWineInfo } from '@/lib/utils/wine-data-helpers';
 
 interface UseWineAnalysisReturn {
     isAnalyzing: boolean;
@@ -55,7 +55,7 @@ export function useWineAnalysis(): UseWineAnalysisReturn {
             });
 
         } catch (err: any) {
-            console.error(`Error analyzing item ${item.id}:`, err);
+            console.error(`Error analyzing item ${item.id}: `, err);
             onComplete(item.id, {
                 status: 'error',
                 error: err.message || '분석 중 오류 발생'
