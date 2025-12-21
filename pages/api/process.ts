@@ -7,6 +7,9 @@ import { geminiService } from '@/lib/gemini';
 import { normalizeWineInfo } from '@/lib/utils/wine-data-helpers';
 import { createFormidableConfig } from '@/lib/formidable-config';
 import { sendSuccess, sendError } from '@/lib/api-utils';
+// @ts-ignore
+import { put } from '@vercel/blob';
+import { getConfig } from '@/lib/config';
 
 export const config = {
   api: {
@@ -121,6 +124,33 @@ async function resolveImageSource(url: string): Promise<{ buffer: Buffer; mimeTy
 }
 
 async function saveImagePermanently(file: formidable.File): Promise<string> {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isVercel = !isDevelopment && (process.env.VERCEL_ENV || process.env.BLOB_READ_WRITE_TOKEN);
+
+  if (isVercel) {
+    try {
+      if (!process.env.BLOB_READ_WRITE_TOKEN) {
+        throw new Error('BLOB_READ_WRITE_TOKEN is not configured');
+      }
+
+      const fileData = await fs.readFile(file.filepath);
+      const ext = path.extname(file.originalFilename || '.jpg');
+      const fileName = `wine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}${ext}`;
+
+      console.log(`Uploading to Vercel Blob: ${fileName}`);
+      const blob = await put(fileName, fileData, {
+        access: 'public',
+        contentType: file.mimetype || 'image/jpeg',
+      });
+
+      return blob.url;
+    } catch (error) {
+      console.error('Vercel Blob upload failed, falling back to local:', error);
+      // Fallback to local storage logic below
+    }
+  }
+
+  // Local storage fallback
   await fs.mkdir(WINE_PHOTOS_DIR, { recursive: true });
   const ext = path.extname(file.originalFilename || '.jpg');
   const fileName = `wine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}${ext}`;
