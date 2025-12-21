@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import fs from 'fs/promises';
 import path from 'path';
+import sharp from 'sharp';
 import { geminiService } from '@/lib/gemini';
 import { normalizeWineInfo } from '@/lib/utils/wine-data-helpers';
 import { createFormidableConfig } from '@/lib/formidable-config';
@@ -10,6 +11,11 @@ import { sendSuccess, sendError } from '@/lib/api-utils';
 // @ts-ignore
 import { put } from '@vercel/blob';
 import { getConfig } from '@/lib/config';
+
+// Get upload configuration
+const appConfig = getConfig();
+const MAX_FILE_SIZE = appConfig.upload.maxFileSize;
+const ALLOWED_TYPES = appConfig.upload.allowedTypes;
 
 export const config = {
   api: {
@@ -45,10 +51,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         imageRequests.push({ ...img, buffer, mimeType });
       }
     } else {
-      // Case 2: Multipart Form Data (Single file upload)
+      // Case 2: Multipart Form Data (Single or Multiple file upload)
       const uploadDir = path.join(process.cwd(), 'tmp');
       await fs.mkdir(uploadDir, { recursive: true }).catch(() => { });
-      const form = formidable(createFormidableConfig({ uploadDir }));
+
+      const form = formidable(createFormidableConfig({
+        uploadDir,
+        multiples: true // Enable multiple file uploads
+      }));
 
       const [fields, files]: [any, any] = await new Promise((resolve, reject) => {
         form.parse(req, (err, fields, files) => {
@@ -56,16 +66,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       });
 
-      const file = Array.isArray(files.image) ? files.image[0] : files.image;
-      if (file) {
+      // Handle multiple ways files might be passed (image, file, files, etc.)
+      let fileArray: formidable.File[] = [];
+      if (files.image) {
+        fileArray = Array.isArray(files.image) ? files.image : [files.image];
+      } else if (files.file) {
+        fileArray = Array.isArray(files.file) ? files.file : [files.file];
+      }
+
+      for (const file of fileArray) {
+        // Validate file before processing
+        const validation = validateFile(file);
+        if (!validation.valid) {
+          return sendError(res, validation.error || 'Invalid file', 400);
+        }
+
         const savedPath = await saveImagePermanently(file);
         const buffer = await fs.readFile(file.filepath);
         imageRequests.push({
-          id: 'upload',
+          id: file.newFilename || `upload_${Date.now()}`,
           buffer,
           mimeType: file.mimetype || 'image/jpeg',
           url: savedPath,
-          type: fields.type?.[0] || 'wine_label'
+          type: fields.type?.[0] || 'wine_label' // Assumes all files have same type if batch uploaded
         });
         await fs.unlink(file.filepath).catch(() => { });
       }
@@ -127,20 +150,34 @@ async function saveImagePermanently(file: formidable.File): Promise<string> {
   const isDevelopment = process.env.NODE_ENV === 'development';
   const isVercel = !isDevelopment && (process.env.VERCEL_ENV || process.env.BLOB_READ_WRITE_TOKEN);
 
+  const ext = path.extname(file.originalFilename || '.jpg');
+  const fileName = `wine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}${ext}`;
+
+  // Optimize image with Sharp before saving
+  let optimizedBuffer: Buffer;
+  try {
+    optimizedBuffer = await sharp(file.filepath)
+      .resize(1200, 1200, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+  } catch (sharpError) {
+    console.warn('Image optimization failed, using original:', sharpError);
+    optimizedBuffer = await fs.readFile(file.filepath);
+  }
+
   if (isVercel) {
     try {
       if (!process.env.BLOB_READ_WRITE_TOKEN) {
         throw new Error('BLOB_READ_WRITE_TOKEN is not configured');
       }
 
-      const fileData = await fs.readFile(file.filepath);
-      const ext = path.extname(file.originalFilename || '.jpg');
-      const fileName = `wine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}${ext}`;
-
       console.log(`Uploading to Vercel Blob: ${fileName}`);
-      const blob = await put(fileName, fileData, {
+      const blob = await put(fileName, optimizedBuffer, {
         access: 'public',
-        contentType: file.mimetype || 'image/jpeg',
+        contentType: 'image/jpeg',
       });
 
       return blob.url;
@@ -152,11 +189,57 @@ async function saveImagePermanently(file: formidable.File): Promise<string> {
 
   // Local storage fallback
   await fs.mkdir(WINE_PHOTOS_DIR, { recursive: true });
-  const ext = path.extname(file.originalFilename || '.jpg');
-  const fileName = `wine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}${ext}`;
   const targetPath = path.join(WINE_PHOTOS_DIR, fileName);
-  await fs.copyFile(file.filepath, targetPath);
+
+  // Path traversal prevention
+  const uploadDirResolved = path.resolve(WINE_PHOTOS_DIR);
+  if (!path.resolve(targetPath).startsWith(uploadDirResolved)) {
+    throw new Error('Invalid file path. Path traversal detected.');
+  }
+
+  await fs.writeFile(targetPath, optimizedBuffer);
   return `/wine-photos/${fileName}`;
+}
+
+/**
+ * Validate uploaded file for security and constraints
+ */
+function validateFile(file: formidable.File): { valid: boolean; error?: string } {
+  // 1. MIME type validation
+  if (!ALLOWED_TYPES.includes(file.mimetype || '')) {
+    return { valid: false, error: `Invalid file type: ${file.mimetype}. Only images allowed.` };
+  }
+
+  // 2. File size validation
+  if (file.size > MAX_FILE_SIZE) {
+    const maxMB = Math.round(MAX_FILE_SIZE / (1024 * 1024));
+    return { valid: false, error: `File too large. Maximum ${maxMB}MB allowed.` };
+  }
+
+  // 3. Filename security validation (path traversal prevention)
+  if (file.originalFilename) {
+    const originalName = file.originalFilename;
+    if (originalName.includes('..') || originalName.includes('/') || originalName.includes('\\')) {
+      return { valid: false, error: 'Invalid filename. Path traversal detected.' };
+    }
+
+    // Filename length limit
+    if (originalName.length > 255) {
+      return { valid: false, error: 'Filename too long. Maximum 255 characters allowed.' };
+    }
+
+    // Special character restriction
+    if (!/^[a-zA-Z0-9._\-\s()가-힣]+$/.test(originalName)) {
+      return { valid: false, error: 'Invalid filename. Contains invalid characters.' };
+    }
+  }
+
+  // 4. Empty file validation
+  if (file.size === 0) {
+    return { valid: false, error: 'Empty file not allowed.' };
+  }
+
+  return { valid: true };
 }
 
 function readRequestBody(req: NextApiRequest): Promise<string> {
@@ -165,3 +248,4 @@ function readRequestBody(req: NextApiRequest): Promise<string> {
     req.on('end', () => resolve(data)); req.on('error', reject);
   });
 }
+
