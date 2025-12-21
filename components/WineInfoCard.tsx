@@ -99,13 +99,13 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
 
                 {/* Details grid */}
                 <dl className="space-y-2 text-sm">
-                    {(data.Producer || data.producer) && (
-                        <div className="flex items-start gap-3">
+                    {(data.Country || data.country) && (
+                        <div className="flex items-center gap-3">
                             <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
-                                Producer
+                                Country
                             </dt>
-                            <dd className="font-body text-wine-cream flex-1 font-medium">
-                                {data.Producer || data.producer}
+                            <dd className="font-body text-wine-creamDim flex-1">
+                                {data.Country || data.country}
                             </dd>
                         </div>
                     )}
@@ -117,6 +117,28 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
                             </dt>
                             <dd className="font-body text-wine-creamDim flex-1">
                                 {data.Region || data.region}
+                            </dd>
+                        </div>
+                    )}
+
+                    {(data.Appellation || data.appellation) && (
+                        <div className="flex items-center gap-3">
+                            <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
+                                Appellation
+                            </dt>
+                            <dd className="font-body text-wine-creamDim flex-1">
+                                {data.Appellation || data.appellation}
+                            </dd>
+                        </div>
+                    )}
+
+                    {(data.Producer || data.producer) && (
+                        <div className="flex items-start gap-3">
+                            <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
+                                Producer
+                            </dt>
+                            <dd className="font-body text-wine-cream flex-1 font-medium">
+                                {data.Producer || data.producer}
                             </dd>
                         </div>
                     )}
@@ -141,17 +163,6 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
                             </dt>
                             <dd className="font-body text-wine-gold flex-1 font-semibold">
                                 {formatKRW(data.Price || data.price)}
-                            </dd>
-                        </div>
-                    )}
-
-                    {(data.Quantity || data.quantity) && (
-                        <div className="flex items-center gap-3">
-                            <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
-                                Quantity
-                            </dt>
-                            <dd className="font-body text-wine-creamDim flex-1">
-                                {data.Quantity || data.quantity} bottles
                             </dd>
                         </div>
                     )}
