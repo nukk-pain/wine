@@ -1,278 +1,499 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { WineInfo } from '@/types';
 
-// Initialize Gemini API with new package
 const genai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
+    apiKey: process.env.GEMINI_API_KEY || '',
 });
 
-// Wine information schema - updated to match Notion properties exactly
-/* WineInfo imported from @/types */
+// ============================================================
+// 타입 정의
+// ============================================================
 
-// Receipt information schema
-/* ReceiptInfo removed */
-
-// Legacy interface for compatibility - extended to match enhanced extraction
 export interface WineData {
-  name: string;
-  vintage?: number | null;
-  producer?: string;
-  region?: string;
-  grape_variety?: string;
-  varietal_reasoning?: string;
-  country?: string;
-  alcohol_content?: string;
-  volume?: string;
-  wine_type?: string;
-  appellation?: string;
-  notes?: string;
-  [key: string]: any;
+    name: string | null;
+    vintage: number | null;
+    producer: string | null;
+    region: string | null;
+    grape_variety: string | null;
+    varietal_reasoning: string;  // non-nullable (필수)
+    country: string | null;
+    alcohol_content: string | null;
+    volume: string | null;
+    wine_type: 'Red' | 'White' | 'Rosé' | 'Sparkling' | 'Dessert' | null;
+    appellation: string | null;
+    notes: string | null;
 }
+
+/**
+ * Result 타입: 검증 실패 시에도 데이터 반환하되 플래그로 구분
+ */
+export type Result<T> =
+    | { ok: true; data: T }
+    | { ok: false; data: T; reason: string };
+
+type ExtractHints = {
+    v?: number | null;
+    nv?: boolean;
+    abv?: string | null;
+    vol?: string | null;
+    t?: 'R' | 'W' | 'P' | 'S' | 'D' | null;
+};
+
+const DEFAULT_MODEL = 'gemini-3-flash-preview';
+
+// ============================================================
+// 1. JSON Schema (Gemini 호환: nullable + enum)
+// ============================================================
+
+/**
+ * [수정] oneOf 대신 nullable: true + enum 사용
+ * Gemini Structured Output 지원 필드: enum, items, nullable, properties, required
+ * 
+ * 참고: responseJsonSchema 사용 시 responseMimeType = 'application/json' 필수
+ */
+const wineDataJsonSchema: Record<string, any> = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+        name: { type: 'string', nullable: true },
+        vintage: { type: 'integer', nullable: true },
+        producer: { type: 'string', nullable: true },
+        region: { type: 'string', nullable: true },
+        grape_variety: { type: 'string', nullable: true },
+        varietal_reasoning: { type: 'string' },  // non-nullable
+        country: { type: 'string', nullable: true },
+        alcohol_content: { type: 'string', nullable: true },
+        volume: { type: 'string', nullable: true },
+        wine_type: {
+            type: 'string',
+            enum: ['Red', 'White', 'Rosé', 'Sparkling', 'Dessert'],
+            nullable: true,
+        },
+        appellation: { type: 'string', nullable: true },
+        notes: { type: 'string', nullable: true },
+    },
+    required: [
+        'name',
+        'vintage',
+        'producer',
+        'region',
+        'grape_variety',
+        'varietal_reasoning',
+        'country',
+        'alcohol_content',
+        'volume',
+        'wine_type',
+        'appellation',
+    ],
+};
+
+const wineInfoJsonSchema: Record<string, any> = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+        Name: { type: 'string', nullable: true },
+        Vintage: { type: 'integer', nullable: true },
+        'Region/Producer': { type: 'string', nullable: true },
+        Price: { type: 'number', nullable: true },
+        Quantity: { type: 'integer' },
+        Store: { type: 'string', nullable: true },
+        'Varietal(품종)': { type: 'array', items: { type: 'string' } },
+        varietal_reasoning: { type: 'string' },  // non-nullable
+        country: { type: 'string', nullable: true },
+        alcohol_content: { type: 'string', nullable: true },
+        volume: { type: 'string', nullable: true },
+        wine_type: {
+            type: 'string',
+            enum: ['Red', 'White', 'Rosé', 'Sparkling', 'Dessert'],
+            nullable: true,
+        },
+        appellation: { type: 'string', nullable: true },
+        notes: { type: 'string', nullable: true },
+    },
+    required: [
+        'Name',
+        'Vintage',
+        'Region/Producer',
+        'Price',
+        'Quantity',
+        'Store',
+        'Varietal(품종)',
+        'varietal_reasoning',
+        'country',
+        'alcohol_content',
+        'volume',
+        'wine_type',
+        'appellation',
+    ],
+};
+
+// ============================================================
+// 2. OCR 텍스트 압축 (secondary 하단 우선)
+// ============================================================
+
+/**
+ * [수정] secondaryLines.slice(-maxSecondary) 로 하단 우선
+ * 수입사/병입 정보는 라벨 하단에 많음
+ */
+function compactOcrText(ocrText: string): string {
+    const rawLines = ocrText
+        .replace(/\r/g, '\n')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+    const seen = new Set<string>();
+    const primaryLines: string[] = [];
+    const secondaryLines: string[] = [];
+
+    for (const line of rawLines) {
+        const norm = line
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}%.\-/'" ]+/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        if (seen.has(norm)) continue;
+        seen.add(norm);
+
+        // 바코드/시리얼 제거
+        const digitRatio = norm.length > 0
+            ? (norm.replace(/[^0-9]/g, '').length / norm.length)
+            : 0;
+        if (norm.length >= 18 && digitRatio > 0.7) continue;
+
+        // URL/전화 완전 제거
+        if (/www\.|http|tel:|phone:/i.test(norm)) continue;
+
+        // Importer → secondary
+        if (/imported by|importer|distributed by|bottled by/i.test(norm)) {
+            secondaryLines.push(line);
+            continue;
+        }
+
+        primaryLines.push(line);
+    }
+
+    let result: string[] = [];
+    if (primaryLines.length <= 45) {
+        result = primaryLines;
+    } else {
+        result = [...primaryLines.slice(0, 30), ...primaryLines.slice(-15)];
+    }
+
+    // [수정] 하단 우선: slice(-5)
+    result.push(...secondaryLines.slice(-5));
+
+    return result.join('\n');
+}
+
+// ============================================================
+// 3. Hint 추출
+// ============================================================
+
+function extractHintsFromText(text: string): ExtractHints {
+    const years = Array.from(text.matchAll(/\b(19|20)\d{2}\b/g))
+        .map((m) => Number(m[0]))
+        .filter((y) => y >= 1900 && y <= 2099)
+        .sort((a, b) => b - a);
+    const v = years[0] ?? null;
+
+    const nv = /\bNV\b|non[- ]?vintage/i.test(text);
+
+    const abvMatch = text.match(/\b(\d{1,2}(?:\.\d)?)\s*%(\s*vol)?\b/i);
+    const abv = abvMatch && Number(abvMatch[1]) >= 6 && Number(abvMatch[1]) <= 25
+        ? `${abvMatch[1]}%`
+        : null;
+
+    const volMatch = text.match(
+        /\b(187|375|500|700|720|750|1000|1500|3000)\s*(ml|mL|ML)\b|\b(1|1\.5|3)\s*(l|L)\b/
+    );
+    const vol = volMatch
+        ? volMatch[0].replace(/\s+/g, '').replace(/ml/i, 'mL').replace(/\bl\b/i, 'L')
+        : null;
+
+    let t: ExtractHints['t'] = null;
+    if (/\bbrut\b|\bcava\b|\bchampagne\b|\bprosecco\b|\bspumante\b/i.test(text)) {
+        t = 'S';
+    } else if (/\bros[ée]\b|rosato|rosado/i.test(text)) {
+        t = 'P';
+    } else if (/dessert|late harvest|sauternes|tokaji|icewine/i.test(text)) {
+        t = 'D';
+    }
+
+    return { v, nv: nv || undefined, abv, vol, t };
+}
+
+function formatHints(hints: ExtractHints): string {
+    const parts: string[] = [];
+    if (hints.v) parts.push(`v=${hints.v}`);
+    if (hints.nv) parts.push('nv=1');
+    if (hints.abv) parts.push(`abv=${hints.abv}`);
+    if (hints.vol) parts.push(`vol=${hints.vol}`);
+    if (hints.t) parts.push(`t=${hints.t}`);
+    return parts.length > 0 ? parts.join(';') : 'none';
+}
+
+// ============================================================
+// 4. 프롬프트 빌더
+// ============================================================
+
+function buildOcrPrompt(cleanOcr: string, hints: ExtractHints): string {
+    return [
+        'Extract wine info from OCR. JSON only.',
+        'Rules:',
+        '- producer=brand; name=product (exclude producer)',
+        '- No cuvée → appellation+style',
+        '- Grapes: explicit first, infer if needed (Barolo→Nebbiolo)',
+        '- null if unknown',
+        `Hints: ${formatHints(hints)}`,
+        'OCR:',
+        cleanOcr,
+    ].join('\n');
+}
+
+function buildVisionPrompt(): string {
+    return [
+        'Extract wine label info. JSON only.',
+        'name=product only; infer grapes if needed.',
+        'null if unknown.',
+    ].join('\n');
+}
+
+// ============================================================
+// 5. Config (responseJsonSchema만 사용)
+// ============================================================
+
+function buildGenConfig(
+    schema: Record<string, any>,
+    thinkingLevel: ThinkingLevel = ThinkingLevel.MINIMAL
+) {
+    return {
+        responseMimeType: 'application/json',  // 필수
+        responseJsonSchema: schema,             // responseSchema와 동시 사용 금지
+        thinkingConfig: { thinkingLevel },      // Gemini 3 Flash용
+        temperature: 0.2,
+        candidateCount: 1,
+        maxOutputTokens: 350,
+    };
+}
+
+// ============================================================
+// 6. 검증
+// ============================================================
+
+interface ValidationResult {
+    valid: boolean;
+    reason?: string;
+}
+
+function validateWineData(data: WineData): ValidationResult {
+    if (!data.name || data.name.length < 2) {
+        return { valid: false, reason: 'name missing/short' };
+    }
+    if (!data.producer) {
+        return { valid: false, reason: 'producer null' };
+    }
+    if (data.producer.toLowerCase() === data.name.toLowerCase()) {
+        return { valid: false, reason: 'producer===name' };
+    }
+    if (!data.varietal_reasoning || data.varietal_reasoning.length < 5) {
+        return { valid: false, reason: 'varietal_reasoning short' };
+    }
+    return { valid: true };
+}
+
+function validateWineInfo(data: WineInfo): ValidationResult {
+    if (!data.Name || data.Name.length < 2) {
+        return { valid: false, reason: 'Name missing/short' };
+    }
+    if (!data['Region/Producer']) {
+        return { valid: false, reason: 'Region/Producer null' };
+    }
+    return { valid: true };
+}
+
+// ============================================================
+// 7. Safe JSON Parse
+// ============================================================
+
+function safeJsonParse<T>(text: string): T {
+    try {
+        return JSON.parse(text) as T;
+    } catch {
+        const m = text.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error('Invalid JSON');
+        return JSON.parse(m[0]) as T;
+    }
+}
+
+// ============================================================
+// 8. 로깅
+// ============================================================
+
+const isDev = process.env.NODE_ENV === 'development';
+const devLog = (msg: string, ...args: any[]) => isDev && console.log(msg, ...args);
+const devTime = (label: string) => isDev && console.time(label);
+const devTimeEnd = (label: string) => isDev && console.timeEnd(label);
+const devError = (msg: string, err: any) => {
+    if (isDev) {
+        console.error(msg, err?.message);
+    }
+};
+
+// ============================================================
+// 9. GeminiService
+// ============================================================
 
 export class GeminiService {
-  private model = 'gemini-3-flash-preview';
+    private model = DEFAULT_MODEL;
 
-  async extractWineInfo(imageBuffer: Buffer, mimeType: string): Promise<WineInfo> {
-    try {
-      // Development logging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🍷 [Gemini] Starting wine label analysis...');
-        console.log('📊 [Gemini] Image size:', imageBuffer.length, 'bytes');
-        console.log('🎯 [Gemini] MIME type:', mimeType);
-        console.log('🤖 [Gemini] Using model:', this.model);
-      }
-      const prompt = `Analyze this wine label image and extract information into a structured JSON format.
+    /**
+     * [수정] Result<T> 반환 - 검증 실패 시 ok: false + reason
+     * [수정] prompt/config 1회 생성, level만 변경하여 재시도
+     */
+    async extractWineInfo(
+        imageBuffer: Buffer,
+        mimeType: string
+    ): Promise<Result<WineInfo>> {
+        try {
+            devLog('🍷 [Vision] Starting...');
+            devTime('⏱️ [Vision]');
 
-Think step-by-step:
-1. Identify all text on the label
-2. Distinguish between brand/producer name and wine product name
-3. Extract grape variety (explicit or infer from appellation/region)
-4. Identify region, country, and any special designations
+            // 프롬프트 1회 생성
+            const prompt = buildVisionPrompt();
+            const contents = [
+                {
+                    role: 'user' as const,
+                    parts: [
+                        { text: prompt },
+                        { inlineData: { data: imageBuffer.toString('base64'), mimeType } },
+                    ],
+                },
+            ];
 
-Required JSON format:
-{
-  "Name": "wine product name (NOT including brand/producer)",
-  "Vintage": year_or_null,
-  "Region/Producer": "producer and region (NOT wine name)",
-  "Price": null,
-  "Quantity": 1,
-  "Store": "",
-  "Varietal(품종)": ["array of grape varieties"],
-  "varietal_reasoning": "how you determined the variety",
-  "country": "country name",
-  "alcohol_content": "percentage if visible",
-  "volume": "bottle size if visible",
-  "wine_type": "Red/White/Rosé/Sparkling/Dessert",
-  "appellation": "official appellation if present",
-  "notes": "special designations: Reserve, Organic, etc."
-}
+            // 1차: MINIMAL
+            let response = await genai.models.generateContent({
+                model: this.model,
+                config: buildGenConfig(wineInfoJsonSchema, ThinkingLevel.MINIMAL),
+                contents,
+            });
 
-Key rules:
-- Name: Product name only (e.g., "Hacienda de Sierra Bella" NOT "Las Condes Hacienda de Sierra Bella")
-- Region/Producer: Brand + region (e.g., "Las Condes, Chile")
-- Varietal: Extract from label OR infer from appellation (Sancerre→Sauvignon Blanc, Barolo→Nebbiolo, etc.)
-- Return valid JSON only, no additional text`;
+            let text = response.text;
+            if (!text) throw new Error('No response');
 
-      const contents = [
-        {
-          role: 'user' as const,
-          parts: [
-            {
-              text: prompt,
-            },
-            {
-              inlineData: {
-                data: imageBuffer.toString('base64'),
-                mimeType: mimeType,
-              },
-            },
-          ],
-        },
-      ];
+            let result = safeJsonParse<WineInfo>(text);
+            let validation = validateWineInfo(result);
 
-      const config = {
-        responseMimeType: 'application/json',
-        thinkingLevel: 'low', // Reduced thinking for faster response
-      };
+            // 검증 실패 → 2차: LOW (같은 contents 재사용)
+            if (!validation.valid) {
+                devLog(`⚠️ [Vision] Retry with LOW: ${validation.reason}`);
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('⚡ [Gemini] Making API request to Gemini...');
-        console.log('🧠 [Gemini] Thinking level: low (faster response)');
-        console.time('⏱️ [Gemini] Wine analysis duration');
-      }
+                response = await genai.models.generateContent({
+                    model: this.model,
+                    config: buildGenConfig(wineInfoJsonSchema, ThinkingLevel.LOW),
+                    contents,
+                });
 
-      const response = await genai.models.generateContent({
-        model: this.model,
-        config,
-        contents,
-      });
+                text = response.text;
+                if (!text) throw new Error('No response on retry');
 
-      if (process.env.NODE_ENV === 'development') {
-        console.timeEnd('⏱️ [Gemini] Wine analysis duration');
-        console.log('✅ [Gemini] Received response from Gemini API');
-      }
+                result = safeJsonParse<WineInfo>(text);
+                validation = validateWineInfo(result);
+            }
 
-      const text = response.text;
-      if (!text) {
-        throw new Error('No response from Gemini');
-      }
+            devTimeEnd('⏱️ [Vision]');
 
-      console.log('📝 [Gemini] Raw response length:', text.length, 'characters');
-      console.log('🔍 [Gemini] Raw response preview:', text.substring(0, 500));
+            if (!validation.valid) {
+                devLog(`❌ [Vision] Still invalid: ${validation.reason}`);
+                return { ok: false, data: result, reason: validation.reason! };
+            }
 
-      const wineInfo = JSON.parse(text) as WineInfo;
+            devLog('✅ [Vision] OK');
+            return { ok: true, data: result };
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🎉 [Gemini] Successfully parsed wine info:');
-        console.log('   Raw parsed data:', JSON.stringify(wineInfo, null, 2));
-        console.log('   Wine Name:', wineInfo.Name);
-        console.log('   Region/Producer:', wineInfo['Region/Producer']);
-        console.log('   Vintage:', wineInfo.Vintage);
-        console.log('   Varietals:', wineInfo['Varietal(품종)']);
-      }
-
-      return wineInfo;
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('❌ [Gemini] Wine analysis error:', error);
-        console.error('   Error type:', error instanceof Error ? error.constructor.name : typeof error);
-        console.error('   Error message:', error instanceof Error ? error.message : String(error));
-      }
-      throw error;
+        } catch (error) {
+            devError('❌ [Vision]', error);
+            throw error;
+        }
     }
-  }
-
-  /* extractReceiptInfo removed for deprecation */
-
-  /* classifyImage removed for deprecation */
 }
 
 export const geminiService = new GeminiService();
 
-// Legacy function for compatibility - upgraded to match new extraction schema
-export async function refineWineDataWithGemini(ocrText: string): Promise<WineData> {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY environment variable is not set');
-  }
+// ============================================================
+// 10. OCR Refinement
+// ============================================================
 
-  if (process.env.NODE_ENV === 'development') {
-    console.log('\n========================================');
-    console.log('🔄 [Gemini OCR Refinement] STARTING');
-    console.log('========================================');
-    console.log('📝 OCR Text Input:');
-    console.log('---');
-    console.log(ocrText);
-    console.log('---');
-    console.log(`📊 OCR Text Length: ${ocrText.length} characters\n`);
-  }
-
-  const prompt = `Analyze this OCR text from a wine label and extract information into structured JSON.
-
-OCR Text:
-${ocrText}
-
-Think step-by-step:
-1. Identify all text elements
-2. Distinguish brand/producer from wine product name
-3. Extract or infer grape variety
-4. Identify region, country, special designations
-
-Required JSON format:
-{
-  "name": "wine product name (NOT including brand/producer)",
-  "vintage": year_or_null,
-  "producer": "producer/brand name",
-  "region": "region name",
-  "grape_variety": "grape variety (extract or infer from appellation)",
-  "varietal_reasoning": "how you determined the variety",
-  "country": "country name",
-  "alcohol_content": "alcohol % if present",
-  "volume": "bottle size if present",
-  "wine_type": "Red/White/Rosé/Sparkling/Dessert",
-  "appellation": "appellation if present",
-  "notes": "special designations: Reserve, Organic, etc."
-}
-
-Key rules:
-- name: Product name only (e.g., "Hacienda de Sierra Bella" NOT "Las Condes Hacienda de Sierra Bella")
-- producer: Brand name only (e.g., "Las Condes")
-- region/country: Separate fields (e.g., region: "Central Valley", country: "Chile")
-- grape_variety: Extract from text OR infer from appellation (Sancerre→Sauvignon Blanc, Barolo→Nebbiolo)
-- Return valid JSON only, no additional text`;
-
-  try {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('📤 [Gemini] SENDING PROMPT:');
-      console.log('---');
-      console.log(prompt);
-      console.log('---\n');
-      console.log('🤖 [Gemini] Model: gemini-3-flash-preview');
-      console.log('🧠 [Gemini] Thinking Level: low (faster response)');
-      console.time('⏱️ [Gemini] API Call Duration');
+/**
+ * [수정] compact/hints/prompt 1회 생성 → level만 변경 재시도
+ * [수정] Result<T> 반환
+ */
+export async function refineWineDataWithGemini(
+    ocrText: string
+): Promise<Result<WineData>> {
+    if (!process.env.GEMINI_API_KEY) {
+        throw new Error('GEMINI_API_KEY not set');
     }
 
-    const contents = [
-      {
-        role: 'user' as const,
-        parts: [
-          {
-            text: prompt,
-          },
-        ],
-      },
-    ];
+    try {
+        devLog('🔄 [OCR] Starting...');
+        devTime('⏱️ [OCR]');
 
-    const config = {
-      responseMimeType: 'application/json',
-      thinkingLevel: 'low', // Reduced thinking for faster response
-    };
+        // 1회만 계산
+        const compact = compactOcrText(ocrText);
+        const hints = extractHintsFromText(compact);
+        const prompt = buildOcrPrompt(compact, hints);
 
-    const response = await genai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      config,
-      contents,
-    });
+        devLog(`📝 [OCR] ${ocrText.length}→${compact.length} chars`);
+        devLog(`🎯 [OCR] Hints: ${formatHints(hints)}`);
 
-    if (process.env.NODE_ENV === 'development') {
-      console.timeEnd('⏱️ [Gemini] API Call Duration');
+        const contents = [
+            { role: 'user' as const, parts: [{ text: prompt }] },
+        ];
+
+        // 1차: MINIMAL
+        let response = await genai.models.generateContent({
+            model: DEFAULT_MODEL,
+            config: buildGenConfig(wineDataJsonSchema, ThinkingLevel.MINIMAL),
+            contents,
+        });
+
+        let text = response.text;
+        if (!text) throw new Error('No response');
+
+        let result = safeJsonParse<WineData>(text);
+        let validation = validateWineData(result);
+
+        // 검증 실패 → 2차: LOW
+        if (!validation.valid) {
+            devLog(`⚠️ [OCR] Retry with LOW: ${validation.reason}`);
+
+            response = await genai.models.generateContent({
+                model: DEFAULT_MODEL,
+                config: buildGenConfig(wineDataJsonSchema, ThinkingLevel.LOW),
+                contents,
+            });
+
+            text = response.text;
+            if (!text) throw new Error('No response on retry');
+
+            result = safeJsonParse<WineData>(text);
+            validation = validateWineData(result);
+        }
+
+        devTimeEnd('⏱️ [OCR]');
+
+        if (!validation.valid) {
+            devLog(`❌ [OCR] Still invalid: ${validation.reason}`);
+            return { ok: false, data: result, reason: validation.reason! };
+        }
+
+        devLog('✅ [OCR] OK');
+        return { ok: true, data: result };
+
+    } catch (error) {
+        devError('❌ [OCR]', error);
+        throw error;
     }
-
-    const text = response.text;
-    if (!text) {
-      throw new Error('No response from Gemini');
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('\n📥 [Gemini] RAW RESPONSE:');
-      console.log('---');
-      console.log(text);
-      console.log('---\n');
-    }
-
-    const parsedData = JSON.parse(text);
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('✅ [Gemini] PARSED RESULT:');
-      console.log(JSON.stringify(parsedData, null, 2));
-      console.log('\n🎯 Key Fields:');
-      console.log('   Name:', parsedData.name);
-      console.log('   Producer:', parsedData.producer);
-      console.log('   Region:', parsedData.region);
-      console.log('   Country:', parsedData.country);
-      console.log('   Vintage:', parsedData.vintage);
-      console.log('   Grape Variety:', parsedData.grape_variety);
-      console.log('   Varietal Reasoning:', parsedData.varietal_reasoning);
-      console.log('========================================\n');
-    }
-
-    // Validate the response has required fields
-    if (!parsedData.name) {
-      throw new Error('Invalid wine data structure from Gemini (missing name)');
-    }
-
-    return parsedData;
-  } catch (error) {
-    console.error('❌ [Gemini Refinement] Error:', error);
-    throw error;
-  }
 }

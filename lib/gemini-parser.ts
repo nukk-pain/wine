@@ -31,7 +31,14 @@ export interface ParsedReceiptData {
 export class NotionCompatibleParser {
   async parseWineLabelForNotion(imageBuffer: Buffer, mimeType: string, imageUrl?: string): Promise<ParsedWineData> {
     try {
-      const wineInfo = await geminiService.extractWineInfo(imageBuffer, mimeType);
+      const result = await geminiService.extractWineInfo(imageBuffer, mimeType);
+
+      if (!result.ok) {
+        console.warn('Gemini validation failed:', result.reason);
+        // Continue with data anyway
+      }
+
+      const wineInfo = result.data;
 
       // Extract Notion-compatible fields
       const notionData: NotionWineProperties = {

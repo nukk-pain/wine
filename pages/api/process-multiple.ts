@@ -117,7 +117,14 @@ async function processSingleImage(
 
       // Extract information based on type
       if (imageType === 'wine_label') {
-        extractedData = await geminiService.extractWineInfo(imageBuffer, mimeType);
+        const result = await geminiService.extractWineInfo(imageBuffer, mimeType);
+
+        if (!result.ok) {
+          console.warn(`Gemini validation failed for ${imageRequest.id}:`, result.reason);
+          // Use data anyway
+        }
+
+        extractedData = result.data;
       } else {
         // Fallback for deprecated 'receipt' type if it gets passed
         console.warn('Receipt processing is deprecated. Skipping.');

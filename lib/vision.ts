@@ -78,8 +78,20 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
             if (process.env.NODE_ENV === 'development') {
               console.log('Calling Gemini for data refinement:', { requestId });
             }
-            geminiData = await refineWineDataWithGemini(extractedText);
-            usedGemini = true;
+            const geminiResult = await refineWineDataWithGemini(extractedText);
+
+            if (geminiResult.ok) {
+              geminiData = geminiResult.data;
+              usedGemini = true;
+            } else {
+              console.warn('Gemini validation failed:', {
+                requestId,
+                reason: geminiResult.reason
+              });
+              // Use data anyway but log warning
+              geminiData = geminiResult.data;
+              usedGemini = true;
+            }
           } catch (geminiError) {
             console.warn('Gemini refinement failed, falling back to rule-based parser:', {
               requestId,
@@ -177,8 +189,19 @@ export async function processWineImage(imageUrl: string): Promise<ProcessedImage
               if (process.env.NODE_ENV === 'development') {
                 console.log('Calling Gemini for unknown type refinement:', { requestId });
               }
-              geminiData = await refineWineDataWithGemini(extractedText);
-              usedGemini = true;
+              const geminiResult = await refineWineDataWithGemini(extractedText);
+
+              if (geminiResult.ok) {
+                geminiData = geminiResult.data;
+                usedGemini = true;
+              } else {
+                console.warn('Gemini validation failed for unknown type:', {
+                  requestId,
+                  reason: geminiResult.reason
+                });
+                geminiData = geminiResult.data;
+                usedGemini = true;
+              }
             } catch (geminiError) {
               console.warn('Gemini refinement failed for unknown type:', {
                 requestId,
