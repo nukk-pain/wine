@@ -22,9 +22,10 @@ export interface DashboardWineRow {
 interface DashboardWineCardProps {
     wine: DashboardWineRow;
     onConsume: (rowNumber: number) => void;
+    onClick?: () => void;
 }
 
-export const DashboardWineCard: React.FC<DashboardWineCardProps> = ({ wine, onConsume }) => {
+export const DashboardWineCard: React.FC<DashboardWineCardProps> = ({ wine, onConsume, onClick }) => {
     const [isConsuming, setIsConsuming] = useState(false);
 
     const handleConsume = (e: React.MouseEvent) => {
@@ -36,7 +37,10 @@ export const DashboardWineCard: React.FC<DashboardWineCardProps> = ({ wine, onCo
     };
 
     return (
-        <article className="relative overflow-hidden rounded-xl bg-wine-glass/30 backdrop-blur-sm border border-wine-glassBorder shadow-sm transition-all duration-300 hover:border-wine-gold/30 hover:bg-wine-glass/50 group">
+        <article
+            onClick={onClick}
+            className={`relative overflow-hidden rounded-xl bg-wine-glass/30 backdrop-blur-sm border border-wine-glassBorder shadow-sm transition-all duration-300 hover:border-wine-gold/30 hover:bg-wine-glass/50 group ${onClick ? 'cursor-pointer' : ''}`}
+        >
             <div className="flex items-center justify-between p-3 gap-3">
 
                 {/* Left: Info */}

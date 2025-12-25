@@ -2,12 +2,14 @@
 import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { DashboardWineCard, DashboardWineRow } from '@/components/DashboardWineCard';
+import { WineDetailModal } from '@/components/WineDetailModal';
 
 export default function Dashboard() {
     const [wines, setWines] = useState<DashboardWineRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [error, setError] = useState('');
+    const [selectedWine, setSelectedWine] = useState<DashboardWineRow | null>(null);
 
     useEffect(() => {
         fetchWines();
@@ -101,11 +103,20 @@ export default function Dashboard() {
                                 key={`${wine.rowNumber}-${wine.name}`} // Use composite key for uniqueness
                                 wine={wine}
                                 onConsume={handleConsume}
+                                onClick={() => setSelectedWine(wine)}
                             />
                         ))}
                     </div>
                 )}
             </main>
+
+            {/* Detail Modal */}
+            {selectedWine && (
+                <WineDetailModal
+                    wine={selectedWine}
+                    onClose={() => setSelectedWine(null)}
+                />
+            )}
         </div>
     );
 }

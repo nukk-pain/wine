@@ -13,7 +13,10 @@ export function formatKRW(value: number | string | null | undefined): string {
         return '-';
     }
 
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    // Handle strings that might contain commas or currency symbols
+    const numValue = typeof value === 'string'
+        ? parseFloat(value.replace(/,/g, '').replace(/[^\d.-]/g, ''))
+        : value;
 
     if (isNaN(numValue)) {
         return '-';
