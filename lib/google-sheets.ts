@@ -101,6 +101,73 @@ export async function saveWineToSheets(data: NotionWineProperties): Promise<{ id
     }
 }
 
+export interface WineRow {
+    rowNumber: number; // 1-based row number for updates
+    name: string;
+    vintage: string;
+    producer: string;
+    country: string;
+    region: string;
+    appellation: string;
+    varietal: string;
+    price: string;
+    quantity: string;
+    store: string;
+    purchaseDate: string;
+    status: string;
+    notes: string;
+}
+
+export async function getWines(): Promise<WineRow[]> {
+    const sheets = await getGoogleSheetsClient();
+    try {
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: GOOGLE_SHEET_ID,
+            range: 'WineList!A2:M', // Skip header row
+        });
+
+        const rows = response.data.values || [];
+        return rows.map((row, index) => ({
+            rowNumber: index + 2, // +2 because we skipped 1 header row and index is 0-based
+            name: row[0] || '',
+            vintage: row[1] || '',
+            producer: row[2] || '',
+            country: row[3] || '',
+            region: row[4] || '',
+            appellation: row[5] || '',
+            varietal: row[6] || '',
+            price: row[7] || '',
+            quantity: row[8] || '',
+            store: row[9] || '',
+            purchaseDate: row[10] || '',
+            status: row[11] || 'In Stock',
+            notes: row[12] || ''
+        }));
+    } catch (error: any) {
+        console.error('❌ Google Sheets Read Error:', error.message);
+        throw new Error(`Failed to fetch wines: ${error.message}`);
+    }
+}
+
+export async function updateWineStatus(rowNumber: number, status: string): Promise<void> {
+    const sheets = await getGoogleSheetsClient();
+    try {
+        // Status is Column L (12th column)
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: GOOGLE_SHEET_ID,
+            range: `WineList!L${rowNumber}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: {
+                values: [[status]]
+            }
+        });
+    } catch (error: any) {
+        console.error('❌ Google Sheets Update Error:', error.message);
+        throw new Error(`Failed to update wine status: ${error.message}`);
+    }
+}
+
+
 export async function saveReceiptToSheets(receiptData: ReceiptData): Promise<any[]> {
     const results = [];
 

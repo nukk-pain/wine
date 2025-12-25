@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import Head from 'next/head';
 import { ImageUpload } from '@/components/ImageUpload';
 import { WineBatchResultDisplay } from '@/components/WineBatchResultDisplay';
@@ -159,9 +160,12 @@ export default function MainPage() {
               </h1>
               <div className="w-16 h-[1px] bg-gradient-to-r from-transparent via-wine-gold/50 to-transparent mx-auto mt-2" />
             </div>
-            <p className="font-body text-[13px] text-wine-creamDim tracking-[0.1em] uppercase">
+            <p className="font-body text-[13px] text-wine-creamDim tracking-[0.1em] uppercase mb-4">
               Personal Collection
             </p>
+            <Link href="/dashboard" className="inline-block py-2 px-4 rounded-full bg-wine-gold/10 border border-wine-gold/30 text-wine-gold text-sm font-body hover:bg-wine-gold/20 transition-all">
+              View Dashboard 🍷
+            </Link>
           </header>
 
           {/* Mobile-first single column layout */}
