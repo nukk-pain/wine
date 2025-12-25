@@ -36,10 +36,16 @@ export const DashboardWineCard: React.FC<DashboardWineCardProps> = ({ wine, onCo
         }
     };
 
+    const isConsumed = wine.status === 'Consumed';
+
     return (
         <article
             onClick={onClick}
-            className={`relative overflow-hidden rounded-xl bg-wine-glass/30 backdrop-blur-sm border border-wine-glassBorder shadow-sm transition-all duration-300 hover:border-wine-gold/30 hover:bg-wine-glass/50 group ${onClick ? 'cursor-pointer' : ''}`}
+            className={`relative overflow-hidden rounded-xl bg-wine-glass/30 backdrop-blur-sm border shadow-sm transition-all duration-300 group
+                ${isConsumed
+                    ? 'border-wine-glassBorder/30 bg-wine-glass/10 grayscale opacity-70'
+                    : 'border-wine-glassBorder hover:border-wine-gold/30 hover:bg-wine-glass/50'}
+                ${onClick ? 'cursor-pointer' : ''}`}
         >
             <div className="flex items-center justify-between p-3 gap-3">
 
@@ -72,13 +78,21 @@ export const DashboardWineCard: React.FC<DashboardWineCardProps> = ({ wine, onCo
                 </div>
 
                 {/* Right: Action */}
-                <button
-                    onClick={handleConsume}
-                    disabled={isConsuming}
-                    className="shrink-0 py-2 px-3 bg-wine-gold/10 border border-wine-gold/20 text-wine-gold font-body font-semibold text-xs rounded-lg hover:bg-wine-gold/20 hover:border-wine-gold/40 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                    {isConsuming ? '...' : 'Drink!'}
-                </button>
+                {!isConsumed && (
+                    <button
+                        onClick={handleConsume}
+                        disabled={isConsuming}
+                        className="shrink-0 py-2 px-3 bg-wine-gold/10 border border-wine-gold/20 text-wine-gold font-body font-semibold text-xs rounded-lg hover:bg-wine-gold/20 hover:border-wine-gold/40 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                        {isConsuming ? '...' : 'Drink!'}
+                    </button>
+                )}
+
+                {isConsumed && (
+                    <div className="shrink-0 py-2 px-3 text-wine-creamDim font-body text-xs italic">
+                        Consumed
+                    </div>
+                )}
             </div>
         </article>
     );

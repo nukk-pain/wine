@@ -7,9 +7,8 @@ export default createApiHandler({
     GET: async (req, res) => {
         try {
             const wines = await getWines();
-            // Filter for 'In Stock' only as per requirements
-            const inStockWines = wines.filter(w => w.status === 'In Stock');
-            sendSuccess(res, inStockWines);
+            // Return all wines so frontend can handle tabs (In Stock vs History) and global search
+            sendSuccess(res, wines);
         } catch (error: any) {
             console.error('Failed to fetch wines:', error);
             sendError(res, 'Failed to fetch wines', 500, error.message);
