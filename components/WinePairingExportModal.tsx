@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { WineRow } from '@/lib/google-sheets';
-import { generatePairingPrompt } from '@/lib/utils/WineListFormatter';
+import { generatePairingPrompt, PairingMode } from '@/lib/utils/WineListFormatter';
 
 interface WinePairingExportModalProps {
     wines: WineRow[];
@@ -10,6 +10,9 @@ interface WinePairingExportModalProps {
 export const WinePairingExportModal: React.FC<WinePairingExportModalProps> = ({ wines, onClose }) => {
     const [showCopySuccess, setShowCopySuccess] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
+    const [mode, setMode] = useState<PairingMode>('food-to-wine');
+    const [foodInput, setFoodInput] = useState('');
+    const [selectedWineIds, setSelectedWineIds] = useState<Set<number>>(new Set());
     const hasShareAPI = typeof navigator !== 'undefined' && typeof navigator.share !== 'undefined';
 
     // Close on escape key
@@ -29,8 +32,24 @@ export const WinePairingExportModal: React.FC<WinePairingExportModalProps> = ({ 
         };
     }, []);
 
+    const toggleWineSelection = (rowNumber: number) => {
+        const newSet = new Set(selectedWineIds);
+        if (newSet.has(rowNumber)) {
+            newSet.delete(rowNumber);
+        } else {
+            newSet.add(rowNumber);
+        }
+        setSelectedWineIds(newSet);
+    };
+
     const handleShare = async () => {
-        const prompt = generatePairingPrompt(wines);
+        const selectedWines = wines.filter(w => selectedWineIds.has(w.rowNumber));
+
+        const prompt = generatePairingPrompt(wines, {
+            mode,
+            foodInput,
+            selectedWines: mode === 'wine-to-food' && selectedWines.length > 0 ? selectedWines : undefined,
+        });
 
         // 1. Try Share API (mobile)
         if (hasShareAPI) {
@@ -77,7 +96,7 @@ export const WinePairingExportModal: React.FC<WinePairingExportModalProps> = ({ 
             />
 
             {/* Modal Content - Bottom Sheet on Mobile, Centered on Desktop */}
-            <div className="relative w-full max-w-lg bg-wine-dark/95 backdrop-blur-md border-t sm:border border-wine-gold/30 rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[85vh] sm:max-h-[70vh] overflow-hidden animate-in slide-in-from-bottom sm:fade-in sm:zoom-in-95 duration-300">
+            <div className="relative w-full max-w-lg bg-wine-dark/95 backdrop-blur-md border-t sm:border border-wine-gold/30 rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[85vh] sm:max-h-[70vh] overflow-hidden animate-in slide-in-from-bottom sm:fade-in sm:zoom-in-95 duration-300 flex flex-col">
 
                 {/* Handle bar (mobile only) */}
                 <div className="sm:hidden pt-3 pb-2">
@@ -109,49 +128,107 @@ export const WinePairingExportModal: React.FC<WinePairingExportModalProps> = ({ 
                 </div>
 
                 {/* Body */}
-                <div className="px-6 py-4 space-y-4 max-h-[50vh] overflow-y-auto custom-scrollbar">
+                <div className="px-6 py-4 space-y-4 overflow-y-auto custom-scrollbar flex-1">
 
-                    {/* Wine List Preview */}
-                    <div className="space-y-2">
-                        <button
-                            onClick={() => setShowPreview(!showPreview)}
-                            className="flex items-center gap-2 text-wine-gold hover:text-wine-goldDark transition-colors text-sm font-medium"
-                        >
-                            <span>{showPreview ? '▼' : '▶'}</span>
-                            <span>📝 와인 목록 미리보기</span>
-                        </button>
+                    {/* Mode Selection */}
+                    <div className="space-y-3">
+                        <label className="text-sm font-medium text-wine-gold">추천 방식을 선택하세요:</label>
 
-                        {showPreview && (
-                            <div className="pl-6 space-y-2 text-sm text-wine-cream bg-wine-glass border border-wine-glassBorder rounded-xl p-4 max-h-48 overflow-y-auto custom-scrollbar">
-                                {wines.slice(0, 10).map((wine, index) => (
-                                    <div key={index} className="text-wine-creamDim">
-                                        • {wine.name} {wine.vintage && `(${wine.vintage})`}
-                                    </div>
+                        <label className="flex items-start gap-3 p-3 rounded-xl border border-wine-glassBorder hover:border-wine-gold/50 cursor-pointer transition-colors">
+                            <input
+                                type="radio"
+                                name="mode"
+                                value="food-to-wine"
+                                checked={mode === 'food-to-wine'}
+                                onChange={() => setMode('food-to-wine')}
+                                className="mt-0.5"
+                            />
+                            <div className="flex-1">
+                                <div className="font-medium text-wine-cream">음식 → 와인 추천</div>
+                                <div className="text-xs text-wine-creamDim mt-0.5">먹을 음식에 맞는 와인 추천</div>
+                            </div>
+                        </label>
+
+                        <label className="flex items-start gap-3 p-3 rounded-xl border border-wine-glassBorder hover:border-wine-gold/50 cursor-pointer transition-colors">
+                            <input
+                                type="radio"
+                                name="mode"
+                                value="wine-to-food"
+                                checked={mode === 'wine-to-food'}
+                                onChange={() => setMode('wine-to-food')}
+                                className="mt-0.5"
+                            />
+                            <div className="flex-1">
+                                <div className="font-medium text-wine-cream">와인 → 음식 추천</div>
+                                <div className="text-xs text-wine-creamDim mt-0.5">선택한 와인에 맞는 음식 추천</div>
+                            </div>
+                        </label>
+
+                        <label className="flex items-start gap-3 p-3 rounded-xl border border-wine-glassBorder hover:border-wine-gold/50 cursor-pointer transition-colors">
+                            <input
+                                type="radio"
+                                name="mode"
+                                value="wine-only"
+                                checked={mode === 'wine-only'}
+                                onChange={() => setMode('wine-only')}
+                                className="mt-0.5"
+                            />
+                            <div className="flex-1">
+                                <div className="font-medium text-wine-cream">와인 테이스팅</div>
+                                <div className="text-xs text-wine-creamDim mt-0.5">음식 없이 와인만 즐기기</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    {/* Food Input (food-to-wine mode) */}
+                    {mode === 'food-to-wine' && (
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-wine-gold">먹을 음식:</label>
+                            <input
+                                type="text"
+                                value={foodInput}
+                                onChange={(e) => setFoodInput(e.target.value)}
+                                placeholder="예: 안심 스테이크, 연어 회, 치즈 플래터..."
+                                className="w-full bg-wine-glass border border-wine-gold/30 rounded-xl py-2.5 px-4 text-wine-cream placeholder-wine-creamDim focus:outline-none focus:border-wine-gold transition-colors text-sm"
+                            />
+                        </div>
+                    )}
+
+                    {/* Wine Selection (wine-to-food mode) */}
+                    {mode === 'wine-to-food' && (
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-wine-gold">
+                                와인 선택 ({selectedWineIds.size}개 선택됨):
+                            </label>
+                            <div className="space-y-2 bg-wine-glass border border-wine-glassBorder rounded-xl p-3">
+                                {wines.slice(0, 20).map((wine) => (
+                                    <label key={wine.rowNumber} className="flex items-start gap-2 cursor-pointer hover:bg-wine-glass/50 p-2 rounded-lg transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedWineIds.has(wine.rowNumber)}
+                                            onChange={() => toggleWineSelection(wine.rowNumber)}
+                                            className="mt-0.5"
+                                        />
+                                        <span className="text-sm text-wine-cream">
+                                            {wine.name} {wine.vintage && `(${wine.vintage})`}
+                                        </span>
+                                    </label>
                                 ))}
-                                {wines.length > 10 && (
-                                    <div className="text-wine-gold text-xs italic">
-                                        ... and {wines.length - 10} more wines
+                                {wines.length > 20 && (
+                                    <div className="text-xs text-wine-gold italic text-center pt-2">
+                                        처음 20개만 표시 (전체 {wines.length}개)
                                     </div>
                                 )}
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
 
-                    {/* Tip */}
-                    <div className="bg-wine-glass border border-wine-gold/20 rounded-xl p-4">
-                        <div className="flex gap-3">
-                            <span className="text-2xl">💡</span>
-                            <div className="flex-1 text-sm text-wine-cream leading-relaxed">
-                                <p className="font-medium text-wine-gold mb-1">How it works:</p>
-                                {hasShareAPI ? (
-                                    <p className="text-wine-creamDim">
-                                        Select ChatGPT or Gemini from the share menu. The app will open with your wine list, ready for pairing recommendations.
-                                    </p>
-                                ) : (
-                                    <p className="text-wine-creamDim">
-                                        Your wine list will be copied to clipboard. Open ChatGPT or Gemini and paste to get pairing recommendations.
-                                    </p>
-                                )}
+                    {/* Info */}
+                    <div className="bg-wine-glass border border-wine-gold/20 rounded-xl p-3">
+                        <div className="flex gap-2">
+                            <span className="text-lg">💡</span>
+                            <div className="flex-1 text-xs text-wine-creamDim leading-relaxed">
+                                모든 와인은 냉장고에 보관 중입니다. AI가 서빙 온도와 준비 방법(미리 꺼내둘 시간, 디캔팅 등)을 안내해드립니다.
                             </div>
                         </div>
                     </div>
