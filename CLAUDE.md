@@ -78,36 +78,37 @@ Always write one test at a time, make it run, then improve structure. Always run
 
 # PROJECT OVERVIEW
 
-This is a Wine Tracker application (version 1.0.7) designed primarily for cloud deployment on Vercel with mobile-first UI. The application uses AI/OCR to extract information from wine labels and receipts, then saves the data to a Notion database.
+This is a Wine Tracker application (version 1.1.0) designed primarily for cloud deployment on Vercel with mobile-first UI. The application uses AI/OCR to extract information from wine labels and receipts, then saves the data to either a Notion database or Google Sheets (dual-database support).
 
 ## Technology Stack
-- **Frontend/Backend**: Next.js 14 with API Routes, TypeScript, Tailwind CSS
+- **Frontend/Backend**: Next.js 15 (Pages Router) with API Routes, TypeScript, Tailwind CSS
 - **Primary Deployment**: Vercel with automatic CI/CD
-- **AI/OCR**: Google Vision API (@google-cloud/vision v4.3.3) + Google Gemini API (@google/genai v1.10.0)
-- **Database**: Notion API (@notionhq/client v2.3.0)
+- **AI/OCR**: Google Vision API (@google-cloud/vision v4.3.3) + Google Gemini API (@google/generative-ai v0.24.1)
+- **Database**: Dual support - Notion API (@notionhq/client v5.0.0) OR Google Sheets API (googleapis v169.0.0)
 - **Storage**: Vercel Blob (@vercel/blob v1.1.1) for production images
 - **Testing**: Jest, React Testing Library, Playwright
 - **Image Processing**: Sharp v0.32.6, Formidable v3.5.1, Node-cache v5.1.2
 
 ## Architecture Overview
 
-The application follows a layered architecture:
-1. **UI Layer**: Mobile-first React components
-   - `UnifiedWorkflow.tsx` - Main workflow component
-   - `ImageUpload.tsx` - Camera/file upload with preview
-   - `WineResultDisplay.tsx` - Results with edit capabilities
-   - `ProcessingProgress.tsx` - Real-time progress indication
-2. **API Layer**: Next.js API routes
-   - `/api/upload` & `/api/upload-multiple` - File uploads with Vercel Blob
-   - `/api/process` & `/api/process-multiple` - AI processing pipeline
-   - `/api/process-with-edit` - Edit workflow support
-   - `/api/notion` & `/api/batch-notion` - Database operations
+The application uses **Next.js Pages Router** (not App Router) and follows a layered architecture:
+
+1. **UI Layer**: Mobile-first React components in `/components`
+   - `components/*.tsx` - UI components for upload, display, and processing
+   - `pages/*.tsx` - Page-level components
+
+2. **API Layer**: Next.js API routes in `/pages/api`
+   - `/api/process` - AI processing pipeline with Gemini
+   - `/api/save` - Save to Notion or Google Sheets
    - `/api/cleanup-blobs` - Storage cleanup
-3. **Service Layer**: 
-   - Image classification and OCR caching (`lib/vision-cache.ts`)
-   - Structured AI parsing with Gemini (`lib/gemini-parser.ts`)
-   - Environment-aware configuration (`lib/config/`)
-   - Error handling and validation (`lib/error-handling.ts`, `lib/validation.ts`)
+
+3. **Service Layer** in `/lib`:
+   - `lib/google-sheets.ts` - Google Sheets integration
+   - `lib/notion.ts` - Notion API integration
+   - `lib/gemini.ts` - Gemini AI processing
+   - `lib/config/` - Environment-aware configuration
+   - `lib/utils/` - Helper utilities and validation
+
 4. **Storage Layer**: Vercel Blob with automatic cleanup
 
 ## Key Development Commands
@@ -154,18 +155,28 @@ Key configuration features:
 
 ### Environment Variables
 
-For Vercel deployment:
+**For Notion Integration (Vercel):**
 ```
 NOTION_API_KEY=secret_xxx
 NOTION_DATABASE_ID=xxx-xxx-xxx
 GEMINI_API_KEY=xxx
 GOOGLE_APPLICATION_CREDENTIALS={"type":"service_account",...}
+BLOB_READ_WRITE_TOKEN=vercel_blob_xxx (auto-provided by Vercel)
 ```
 
-For local/NAS deployment:
+**For Google Sheets Integration (Vercel):**
 ```
-NOTION_API_KEY=secret_xxx
-NOTION_DATABASE_ID=xxx-xxx-xxx
+GOOGLE_SHEET_ID=xxx-xxx-xxx
+GEMINI_API_KEY=xxx
+GOOGLE_APPLICATION_CREDENTIALS={"type":"service_account",...}
+BLOB_READ_WRITE_TOKEN=vercel_blob_xxx
+```
+
+**For local/NAS deployment:**
+```
+NOTION_API_KEY=secret_xxx (if using Notion)
+NOTION_DATABASE_ID=xxx-xxx-xxx (if using Notion)
+GOOGLE_SHEET_ID=xxx-xxx-xxx (if using Google Sheets)
 GEMINI_API_KEY=xxx
 GOOGLE_APPLICATION_CREDENTIALS=./path/to/credentials.json
 UPLOAD_DIR=/custom/upload/path (optional)
@@ -189,16 +200,24 @@ The project includes comprehensive testing at multiple levels:
 
 ## Core Workflow
 
+The typical wine tracking workflow:
+
+1. **Image Upload** → User uploads wine label/receipt image via mobile camera or file upload
+2. **AI Analysis** → Gemini API extracts structured wine data (name, vintage, producer, region, etc.)
+3. **Review & Edit** → User reviews extracted data and makes corrections if needed
+4. **Save** → Data saved to either Notion database or Google Sheets based on configuration
+5. **Cleanup** → Temporary image files automatically deleted from Vercel Blob storage
+
 ## Current Development Status
 
-The application is now in production (v1.0.7) with the following completed features:
+The application is now in production (v1.1.0) with the following completed features:
 - ✅ Mobile-first responsive UI with camera integration
 - ✅ Multiple image upload and batch processing
-- ✅ AI-powered image classification and OCR
+- ✅ AI-powered image classification and OCR with Gemini
 - ✅ Structured data extraction with Gemini
 - ✅ Edit workflow for manual corrections
-- ✅ Notion database integration with batch operations
-- ✅ Vercel Blob storage with cleanup
+- ✅ Dual database support: Notion API and Google Sheets API
+- ✅ Vercel Blob storage with automatic cleanup
 - ✅ Comprehensive test suite and performance monitoring
 - ✅ Production deployment with error handling
 
@@ -273,10 +292,11 @@ The application is now in production (v1.0.7) with the following completed featu
 ## Production Application
 The Wine Tracker is a fully functional production app deployed on Vercel with:
 - Mobile-optimized interface for wine label and receipt processing
-- Real-time AI analysis with progress feedback
+- Real-time AI analysis with Gemini API
 - Edit capabilities for manual corrections
-- Automatic Notion database integration
+- Dual database support (Notion or Google Sheets)
 - Batch processing support for multiple images
+- Automatic image cleanup after processing
 
 ## Test Environment
 - Comprehensive test coverage with real image assets
@@ -292,3 +312,21 @@ The Wine Tracker is a fully functional production app deployed on Vercel with:
 - Implement proper caching for API cost management
 - Ensure all changes maintain backward compatibility
 - Always run full test suite before significant changes
+
+## Database Selection Guide
+
+The app supports two database backends - choose based on your needs:
+
+**Use Notion API when:**
+- You want rich database features (filters, sorts, views)
+- You need a built-in UI for data management
+- You want to share wine collection with others via Notion
+- Set: `NOTION_API_KEY` and `NOTION_DATABASE_ID`
+
+**Use Google Sheets when:**
+- You prefer spreadsheet-based data management
+- You need Excel-like formulas and pivot tables
+- You want easy data export/import
+- Set: `GOOGLE_SHEET_ID` and `GOOGLE_APPLICATION_CREDENTIALS`
+
+**Note:** The app detects which database to use based on environment variables. If both are set, Notion takes precedence.

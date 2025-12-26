@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { DashboardWineCard, DashboardWineRow } from '@/components/DashboardWineCard';
 import { WineDetailModal } from '@/components/WineDetailModal';
+import { WinePairingExportModal } from '@/components/WinePairingExportModal';
 
 export default function Dashboard() {
     const [wines, setWines] = useState<DashboardWineRow[]>([]);
@@ -11,6 +12,7 @@ export default function Dashboard() {
     const [error, setError] = useState('');
     const [selectedWine, setSelectedWine] = useState<DashboardWineRow | null>(null);
     const [activeTab, setActiveTab] = useState<'stock' | 'consumed'>('stock');
+    const [showPairingModal, setShowPairingModal] = useState(false);
 
     useEffect(() => {
         fetchWines();
@@ -92,6 +94,23 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+                {/* Food Pairing Button */}
+                {!searchTerm && (
+                    <div className="flex items-center justify-center mb-4">
+                        <button
+                            onClick={() => setShowPairingModal(true)}
+                            disabled={wines.filter(w => w.status === 'In Stock').length === 0}
+                            className="py-2.5 px-4 bg-wine-gold/10 border border-wine-gold/30 text-wine-gold text-sm font-body font-medium rounded-xl hover:bg-wine-gold/20 hover:border-wine-gold/50 transition-all duration-200 active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <span>🍽️</span>
+                            <span>Get Food Pairing</span>
+                            <span className="ml-1 px-2 py-0.5 bg-wine-gold/20 text-wine-gold text-xs rounded-full">
+                                {wines.filter(w => w.status === 'In Stock').length}
+                            </span>
+                        </button>
+                    </div>
+                )}
+
                 {/* Tabs */}
                 {!searchTerm && (
                     <div className="flex gap-6 justify-center">
@@ -152,6 +171,14 @@ export default function Dashboard() {
                 <WineDetailModal
                     wine={selectedWine}
                     onClose={() => setSelectedWine(null)}
+                />
+            )}
+
+            {/* Food Pairing Modal */}
+            {showPairingModal && (
+                <WinePairingExportModal
+                    wines={wines.filter(w => w.status === 'In Stock')}
+                    onClose={() => setShowPairingModal(false)}
                 />
             )}
         </div>
