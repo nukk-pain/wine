@@ -54,6 +54,7 @@
       "Bash(git reset:*)",
       "Skill(frontend-design)",
       "Skill(frontend-design:*)",
+      "Model(claude-haiku-4.5:*)",
       "Bash(dir:*)",
       "Bash(timeout 20s npm run dev:*)"
     ],

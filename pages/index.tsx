@@ -164,7 +164,7 @@ export default function MainPage() {
               Personal Collection
             </p>
             <Link href="/dashboard" className="inline-block py-2 px-4 rounded-full bg-wine-gold/10 border border-wine-gold/30 text-wine-gold text-sm font-body hover:bg-wine-gold/20 transition-all">
-              View Dashboard 🍷
+              View Cellars 🍷
             </Link>
           </header>
 
