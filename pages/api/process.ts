@@ -118,12 +118,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Return standardized response
     // If it was a single request, Return simplified object for backward compatibility
-    if (imageRequests.length === 1 && results[0].success) {
-      return sendSuccess(res, {
-        ...results[0].data,
-        type: 'wine_label',
-        extractedData: results[0].data
-      });
+    if (imageRequests.length === 1) {
+      if (results[0].success) {
+        return sendSuccess(res, {
+          ...results[0].data,
+          type: 'wine_label',
+          extractedData: results[0].data
+        });
+      } else {
+        // NOTE: Check for rate limit error and return 429 status
+        const errorMsg = results[0].error || 'Processing failed';
+        const isRateLimitError = errorMsg.toLowerCase().includes('rate') ||
+          errorMsg.toLowerCase().includes('quota') ||
+          errorMsg.toLowerCase().includes('429') ||
+          errorMsg.toLowerCase().includes('too many');
+
+        if (isRateLimitError) {
+          return sendError(res, errorMsg, 429);
+        }
+        return sendError(res, errorMsg, 500);
+      }
+    }
+
+    // NOTE: For batch requests, check if any rate limit errors occurred
+    const hasRateLimitError = results.some(r => {
+      if (!r.success && r.error) {
+        const err = r.error.toLowerCase();
+        return err.includes('rate') || err.includes('quota') || err.includes('429') || err.includes('too many');
+      }
+      return false;
+    });
+
+    if (hasRateLimitError) {
+      return sendError(res, 'API rate limit exceeded. Please try again later.', 429);
     }
 
     return sendSuccess(res, { results, success: true });
