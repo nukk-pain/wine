@@ -4,7 +4,7 @@ import { ApiErrorResponse, UploadResponse } from '@/types';
 interface ImageUploadConfig {
     maxFileSize: number;      // default: 10 * 1024 * 1024 (10MB)
     allowedTypes: string[];   // default: ['image/jpeg', 'image/png', 'image/webp']
-    maxFiles: number;         // default: 10
+    maxFiles: number;         // default: 20
 }
 
 export interface UploadResult {
@@ -24,7 +24,7 @@ interface UseImageUploadReturn {
 const DEFAULT_CONFIG: ImageUploadConfig = {
     maxFileSize: 10 * 1024 * 1024,
     allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
-    maxFiles: 10
+    maxFiles: 20
 };
 
 export function useImageUpload(config: Partial<ImageUploadConfig> = {}): UseImageUploadReturn {

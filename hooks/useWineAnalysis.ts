@@ -75,7 +75,8 @@ export function useWineAnalysis(): UseWineAnalysisReturn {
         try {
             // Parallel processing with concurrency limit
             // Process up to MAX_CONCURRENT items at once to balance speed and API limits
-            const MAX_CONCURRENT = 3; // Adjust based on API rate limits
+            // NOTE: Set to 2 to avoid Vercel serverless function timeout (10s limit)
+            const MAX_CONCURRENT = 2;
 
             const pendingItems = items.filter(item =>
                 item.status === 'pending' ||

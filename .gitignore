@@ -172,3 +172,5 @@ deployment/archive/
 
 # Claude Code settings (local development)
 .claude/settings.local.json
+.vercel
+.env*.local
