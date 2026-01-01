@@ -114,12 +114,16 @@ function buildVisionPrompt(): string {
 
 PROCESS:
 1. Identify PRODUCER (winery/brand) and PRODUCT NAME (cuvée/designation)
-2. Find VINTAGE, REGION/APPELLATION, GRAPE VARIETIES
-3. Check for ALCOHOL %, VOLUME, WINE TYPE indicators
+2. Find VINTAGE, REGION, GRAPE VARIETIES
+3. Determine COUNTRY of origin (e.g., France, Italy, Spain, USA, Chile, Australia)
+4. Identify APPELLATION (official designation like AOC, DOC, DOCG, AVA)
+5. Check for ALCOHOL %, VOLUME, WINE TYPE indicators
 
 OUTPUT REQUIREMENTS:
 - Return valid JSON only
 - Follow exact schema fields
+- country: MUST provide country of origin (infer from region/appellation if not visible)
+- appellation: Official wine designation if available
 - Include varietal_reasoning explaining grape source
 - Notes: designations/style only, NO URLs`;
 }

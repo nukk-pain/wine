@@ -87,6 +87,8 @@ export function useWineAnalysis(): UseWineAnalysisReturn {
                 status: 'error',
                 error: err.message || '분석 중 오류 발생'
             });
+            // NOTE: Re-throw to signal failure to Promise.allSettled
+            throw err;
         }
     };
 
@@ -102,8 +104,8 @@ export function useWineAnalysis(): UseWineAnalysisReturn {
         try {
             // Parallel processing with concurrency limit
             // Process up to MAX_CONCURRENT items at once to balance speed and API limits
-            // NOTE: Set to 2 to avoid Vercel serverless function timeout (10s limit)
-            const MAX_CONCURRENT = 2;
+            // NOTE: Increased to 4 for paid Gemini tier with higher rate limits
+            const MAX_CONCURRENT = 4;
 
             const pendingItems = items.filter(item =>
                 item.status === 'pending' ||
@@ -114,17 +116,36 @@ export function useWineAnalysis(): UseWineAnalysisReturn {
             // NOTE: Delay between batches to avoid Gemini API rate limits (429)
             const BATCH_DELAY_MS = 1000;
 
+            // NOTE: Track if any failure occurred to stop processing remaining batches
+            let hasFailure = false;
+
             // Process in batches for controlled parallelism
             for (let i = 0; i < pendingItems.length; i += MAX_CONCURRENT) {
+                // NOTE: Stop processing if previous batch had failures
+                if (hasFailure) {
+                    // Mark remaining items as skipped
+                    const remainingItems = pendingItems.slice(i);
+                    remainingItems.forEach(item => {
+                        onItemComplete(item.id, {
+                            status: 'error',
+                            error: '이전 작업 실패로 건너뜀. 재시도 버튼을 눌러주세요.'
+                        });
+                    });
+                    break;
+                }
+
                 const batch = pendingItems.slice(i, i + MAX_CONCURRENT);
 
-                // Process batch items in parallel
-                await Promise.all(
+                // Process batch items and track failures using allSettled
+                const results = await Promise.allSettled(
                     batch.map(item => analyzeItemWithRetry(item, onItemComplete))
                 );
 
+                // NOTE: Check if any item in this batch failed (rejected promise)
+                hasFailure = results.some(result => result.status === 'rejected');
+
                 // Add delay between batches to prevent rate limiting
-                if (i + MAX_CONCURRENT < pendingItems.length) {
+                if (!hasFailure && i + MAX_CONCURRENT < pendingItems.length) {
                     await delay(BATCH_DELAY_MS);
                 }
             }
