@@ -13,6 +13,7 @@ interface WineInfoCardProps {
     onDelete: (id: string) => void;
     onRetryAnalysis?: (id: string) => void;
     onSaveIndividual?: (id: string, notionData: any) => void;
+    onQuickUpdate?: (id: string, field: 'Price' | 'Store', value: number | string | null) => void;
 }
 
 export const WineInfoCard: React.FC<WineInfoCardProps> = ({
@@ -23,7 +24,8 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
     onEdit,
     onDelete,
     onRetryAnalysis,
-    onSaveIndividual
+    onSaveIndividual,
+    onQuickUpdate
 }) => {
     const data = (item.extractedData || {}) as any;
 
@@ -156,27 +158,44 @@ export const WineInfoCard: React.FC<WineInfoCardProps> = ({
                         </div>
                     )}
 
-                    {(data.Price || data.price) && (
-                        <div className="flex items-center gap-3">
-                            <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
-                                Price
-                            </dt>
-                            <dd className="font-body text-wine-gold flex-1 font-semibold">
-                                {formatKRW(data.Price || data.price)}
-                            </dd>
-                        </div>
-                    )}
+                    {/* 인라인 퀵 입력: 가격 */}
+                    <div className="flex items-center gap-3">
+                        <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
+                            Price
+                        </dt>
+                        <dd className="flex-1">
+                            <input
+                                type="number"
+                                value={data.Price || data.price || ''}
+                                onChange={(e) => {
+                                    const value = e.target.value ? parseFloat(e.target.value) : null;
+                                    onQuickUpdate?.(item.id, 'Price', value);
+                                }}
+                                placeholder="₩ 가격 입력"
+                                disabled={isProcessing}
+                                className="w-full px-2 py-1.5 bg-wine-dark/50 border border-wine-glassBorder rounded-lg text-wine-gold font-body text-sm font-semibold placeholder:text-wine-creamDark/50 placeholder:font-normal focus:border-wine-gold/50 focus:outline-none focus:ring-1 focus:ring-wine-gold/30 transition-all disabled:opacity-40"
+                            />
+                        </dd>
+                    </div>
 
-                    {(data.Store || data.store) && (
-                        <div className="flex items-center gap-3">
-                            <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
-                                Store
-                            </dt>
-                            <dd className="font-body text-wine-creamDim flex-1">
-                                {data.Store || data.store}
-                            </dd>
-                        </div>
-                    )}
+                    {/* 인라인 퀵 입력: 구매처 */}
+                    <div className="flex items-center gap-3">
+                        <dt className="font-body text-wine-creamDark w-16 flex-shrink-0 text-xs">
+                            Store
+                        </dt>
+                        <dd className="flex-1">
+                            <input
+                                type="text"
+                                value={data.Store || data.store || ''}
+                                onChange={(e) => {
+                                    onQuickUpdate?.(item.id, 'Store', e.target.value);
+                                }}
+                                placeholder="구매처 입력"
+                                disabled={isProcessing}
+                                className="w-full px-2 py-1.5 bg-wine-dark/50 border border-wine-glassBorder rounded-lg text-wine-creamDim font-body text-sm placeholder:text-wine-creamDark/50 focus:border-wine-gold/50 focus:outline-none focus:ring-1 focus:ring-wine-gold/30 transition-all disabled:opacity-40"
+                            />
+                        </dd>
+                    </div>
                 </dl>
 
                 {/* Debug Info (development only) */}

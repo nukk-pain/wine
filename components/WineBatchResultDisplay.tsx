@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ImageProcessingItem, NotionWineProperties } from '@/types';
 import { WineInfoCard } from './WineInfoCard';
 import { WineEditForm } from './WineEditForm';
-import { ManualWineForm } from './ManualWineForm';
+import WineDataEditForm from './WineDataEditForm';
 import { useWineSelection } from '@/hooks/useWineSelection';
 
 import { convertToNotionFormat } from '@/lib/utils/wine-data-helpers';
@@ -15,6 +15,7 @@ interface BatchResultDisplayProps {
   onAddManual?: (wineData: NotionWineProperties) => Promise<boolean>;
   onRetryAnalysis?: (itemId: string) => Promise<void>;
   onDelete?: (itemId: string) => void;
+  onQuickUpdate?: (itemId: string, field: 'Price' | 'Store', value: number | string | null) => void;
   loading?: boolean;
   className?: string;
 }
@@ -27,6 +28,7 @@ export function WineBatchResultDisplay({
   onAddManual,
   onRetryAnalysis,
   onDelete,
+  onQuickUpdate,
   loading = false,
   className = ''
 }: BatchResultDisplayProps) {
@@ -155,9 +157,10 @@ export function WineBatchResultDisplay({
           </h3>
           <div className="grid grid-cols-1 gap-6">
             {manualForms.map(formId => (
-              <ManualWineForm
+              <WineDataEditForm
                 key={formId}
-                onSubmit={(data) => handleManualSubmit(formId, data)}
+                mode="create"
+                onSave={(data) => handleManualSubmit(formId, data)}
                 onCancel={() => removeManualForm(formId)}
                 isSubmitting={loading}
               />
@@ -278,6 +281,7 @@ export function WineBatchResultDisplay({
                 onDelete={onDelete || (() => { })}
                 onRetryAnalysis={onRetryAnalysis}
                 onSaveIndividual={onSaveIndividual}
+                onQuickUpdate={onQuickUpdate}
               />
             )
           );

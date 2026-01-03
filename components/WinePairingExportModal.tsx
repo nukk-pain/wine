@@ -198,27 +198,31 @@ export const WinePairingExportModal: React.FC<WinePairingExportModalProps> = ({ 
                     {mode === 'wine-to-food' && (
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-wine-gold">
-                                와인 선택 ({selectedWineIds.size}개 선택됨):
+                                와인 선택 ({selectedWineIds.size}/{wines.length}):
                             </label>
-                            <div className="space-y-2 bg-wine-glass border border-wine-glassBorder rounded-xl p-3">
-                                {wines.slice(0, 20).map((wine) => (
-                                    <label key={wine.rowNumber} className="flex items-start gap-2 cursor-pointer hover:bg-wine-glass/50 p-2 rounded-lg transition-colors">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedWineIds.has(wine.rowNumber)}
-                                            onChange={() => toggleWineSelection(wine.rowNumber)}
-                                            className="mt-0.5"
-                                        />
-                                        <span className="text-sm text-wine-cream">
-                                            {wine.name} {wine.vintage && `(${wine.vintage})`}
-                                        </span>
-                                    </label>
-                                ))}
-                                {wines.length > 20 && (
-                                    <div className="text-xs text-wine-gold italic text-center pt-2">
-                                        처음 20개만 표시 (전체 {wines.length}개)
-                                    </div>
-                                )}
+                            <div className="bg-wine-glass border border-wine-glassBorder rounded-xl p-2 max-h-60 sm:max-h-48 overflow-y-auto custom-scrollbar">
+                                <div className="grid grid-cols-1 gap-0.5">
+                                    {wines.map((wine) => (
+                                        <label
+                                            key={wine.rowNumber}
+                                            className={`flex items-center gap-2 cursor-pointer px-3 py-2.5 sm:py-1.5 rounded transition-colors text-sm sm:text-xs ${
+                                                selectedWineIds.has(wine.rowNumber)
+                                                    ? 'bg-wine-gold/20 text-wine-gold'
+                                                    : 'hover:bg-wine-glass/50 text-wine-cream'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedWineIds.has(wine.rowNumber)}
+                                                onChange={() => toggleWineSelection(wine.rowNumber)}
+                                                className="w-4 h-4 sm:w-3 sm:h-3 flex-shrink-0"
+                                            />
+                                            <span className="truncate">
+                                                {wine.name}{wine.vintage ? ` '${String(wine.vintage).slice(-2)}` : ''}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}

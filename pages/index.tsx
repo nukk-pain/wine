@@ -121,6 +121,22 @@ export default function MainPage() {
     setProcessingItems(prev => prev.filter(i => i.id !== id));
   };
 
+  // 인라인 퀵 업데이트: 가격/구매처 필드만 즉시 업데이트
+  const handleQuickUpdate = (id: string, field: 'Price' | 'Store', value: number | string | null) => {
+    setProcessingItems(prev => prev.map(item => {
+      if (item.id !== id) return item;
+
+      const currentData = (item.extractedData || {}) as any;
+      return {
+        ...item,
+        extractedData: {
+          ...currentData,
+          [field]: value
+        }
+      };
+    }));
+  };
+
   return (
     <>
       <Head>
@@ -217,6 +233,7 @@ export default function MainPage() {
                       onAddManual={handleAddManual}
                       onRetryAnalysis={handleRetryAnalysis}
                       onDelete={handleDelete}
+                      onQuickUpdate={handleQuickUpdate}
                       loading={isSaving}
                     />
                   </ProcessingStep>
